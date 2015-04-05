@@ -8,6 +8,11 @@ using namespace std;
 
 void GameController::initializeGraphics(int width, int height)
 {
+    firstPersonMode = false;
+    wireframeMode = false;
+    physicsDebugMode = true;
+    fogEnabled = false;
+    
     texture = loadTexture("resources/brickwall.jpg");
     cube = createCubeMesh(texture.openglId, texture.getMaxU(), texture.getMaxV());
     cube.decomposeIntoSingleTextureMeshes();
@@ -18,17 +23,60 @@ void GameController::initializeGraphics(int width, int height)
         cubePositions.push_back(glm::vec3(3, 0, z));
     }
     
-    physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, -5), glm::vec3(5, -1, 5) });
-    physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, 5), glm::vec3(-5, -1, 5) });
+    physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, -5), glm::vec3(5, -1, 5), 1 });
+    physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, 5), glm::vec3(-5, -1, 5), 1 });
     
-    GLfloat step = 0.2;
-    for (int t = 0; t < 10; t++)
+    GLfloat step = 0.27;
+    GLfloat yOffset = 0, zOffset = 0;
+    GLfloat horizSlope = 0.75;
+    horizSlope = 0;
+    
+    int from = (int)physicsEngine.triangles.size();
+    
+    for (int t = 0; t < 100; t++)
     {
-        physicsEngine.triangles.push_back(PhysicalTriangle {
+#define vertex(x, y, z) glm::vec3((x), -1 + (y) + yOffset, -5 + (z) + zOffset)
+#define triangle(a, b, c) physicsEngine.triangles.push_back(PhysicalTriangle { a, b, c, 0.6 })
+#define quad(a, b, c, d) { triangle(a, b, c); triangle(a, c, d); }
+        
+        quad(vertex(0, 0, 0), vertex(0, +step, -horizSlope), vertex(1, +step, -horizSlope), vertex(1, 0, 0));
+        
+        yOffset += +step;
+        zOffset += -horizSlope;
+        
+        quad(vertex(0, 0, 0), vertex(1, 0, 0), vertex(1, 0, -step), vertex(0, 0, -step));
+        
+        zOffset += -step;
+        
+        /*physicsEngine.triangles.push_back(PhysicalTriangle {
             glm::vec3(-5, -1 - step * t, -5 - step * t),
             glm::vec3(5, -1 - step * t, -5 - step * t),
-            glm::vec3(5, -1 - step * (t * 1), -5 - step * t) });
+            glm::vec3(5, -1 - step * (t * 1), -5 - step * t) });*/
+        
+#undef vertex
+#undef triangle
+#undef quad
     }
+    
+    int to = (int)physicsEngine.triangles.size();
+    
+    int nClimbable = 0;
+    for (int i = from; i < to; i++)
+    {
+        auto& triangle = physicsEngine.triangles[i];
+        GLfloat yMin = min(triangle.a.y, min(triangle.b.y, triangle.c.y));
+        GLfloat yMax = max(triangle.a.y, max(triangle.b.y, triangle.c.y));
+        
+        if (yMax - yMin > 1e-3)
+        {
+            //triangle.walkSpeed = 1;
+            //triangle.climbSpeed = 10;
+            triangle.isClimber = true;
+            nClimbable++;
+            //printf("Ok climbable\n");
+        }
+    }
+    printf("out of %d %d climbable\n", to - from, nClimbable);
     
     //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-1, 0, -1), glm::vec3(1, -1, 1), glm::vec3(-1, 0, 1) });
     
@@ -53,7 +101,8 @@ void GameController::initializeGraphics(int width, int height)
     
     cameraVector = glm::vec3(0, 0, -1);
     player.position = glm::vec3(0, 0, +1);
-    player.radius = 0.25;
+    player.radius = 0.2;
+    player.currentWalkSpeed = 1;
     updatePlayerDirection();
     
     physicsEngine.physicalBodies.push_back(&player);
@@ -86,7 +135,7 @@ void GameController::simulateWorld(double msPassed)
 {
     currentTime += msPassed / 1000.0;
     
-    double speed = 1.0;
+    double speed = 1;
     double dt = msPassed / 1000.0;
  
     updatePlayerDirection();
@@ -103,6 +152,13 @@ void GameController::simulateWorld(double msPassed)
     if (pressedKeys.count(SDLK_s))
         player.easyMove(MovementType::BACKWARD, speed, dt);
     
+    if (pressedKeys.count(SDLK_SPACE))
+    {
+        player.yAccel = 0.1;
+        //player.position += glm::vec3(0, 1, 0);
+    }
+    
+    physicsEngine.gravity = pressedKeys.count(SDLK_e) ? 0 : 0.03;
     physicsEngine.processPhysics();
 }
 
@@ -114,6 +170,18 @@ void GameController::keyPressed(SDL_Keycode keycode)
 void GameController::keyReleased(SDL_Keycode keycode)
 {
     pressedKeys.erase(keycode);
+    
+    if (keycode == SDLK_q)
+        firstPersonMode = !firstPersonMode;
+    
+    if (keycode == SDLK_o)
+        wireframeMode = !wireframeMode;
+    
+    if (keycode == SDLK_p)
+        physicsDebugMode = !physicsDebugMode;
+    
+    if (keycode == SDLK_f)
+        fogEnabled = !fogEnabled;
 }
 
 void GameController::relativeMouseMotion(int dx, int dy)
@@ -142,21 +210,41 @@ void GameController::renderFrame()
     
     //projectionMatrix = glm::frustum(-1.0 * aspectRatio, 1.0 * aspectRatio, -1.0, 1.0, 1.0, 1e3);
     projectionMatrix = glm::perspective(45.0f / 180.0f * (GLfloat)M_PI, aspectRatio, 0.1f, 1e3f);
-    viewMatrix = glm::lookAt(player.position + playerHeightVector,
-                             player.position + playerHeightVector + cameraVector, glm::vec3(0, 1, 0));
+    
+    if (!firstPersonMode)
+    {
+        viewMatrix = glm::lookAt(player.position + playerHeightVector,
+                                player.position + playerHeightVector + cameraVector, glm::vec3(0, 1, 0));
+    }
+    else
+    {
+        viewMatrix = glm::lookAt(player.position + playerHeightVector - cameraVector * 4.0f,
+                                player.position + playerHeightVector, glm::vec3(0, 1, 0));
+    }
+    
     modelMatrix = glm::translate(modelMatrix, glm::vec3(0, 0, -5));
     modelMatrix = glm::rotate(modelMatrix, angle, glm::vec3(sin(angle), sin(angle + 2 * M_PI / 3), sin(angle + M_PI / 3)));
     modelMatrix = glm::scale(modelMatrix, glm::vec3(2, 2, 2));
     
-#if 0
-    glFogi(GL_FOG_MODE, GL_EXP);
-    glFogfv(GL_FOG_COLOR, glm::value_ptr(glm::vec3(0, 0, 0)));
-    glFogf(GL_FOG_DENSITY, 0.15f);
-    glHint(GL_FOG_HINT, GL_DONT_CARE);
-    glFogf(GL_FOG_START, 1.0f);
-    glFogf(GL_FOG_END, 5.0f);
-    glEnable(GL_FOG);
-#endif
+    if (fogEnabled)
+    {
+        glFogi(GL_FOG_MODE, GL_EXP);
+        glFogfv(GL_FOG_COLOR, glm::value_ptr(glm::vec3(0, 0, 0)));
+        glFogf(GL_FOG_DENSITY, 1.00f);
+        glHint(GL_FOG_HINT, GL_DONT_CARE);
+        glFogf(GL_FOG_START, 1.0f);
+        glFogf(GL_FOG_END, 1.5f);
+        glEnable(GL_FOG);
+    }
+    else
+    {
+        glDisable(GL_FOG);
+    }
+    
+    if (wireframeMode)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    else    
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
@@ -178,5 +266,18 @@ void GameController::renderFrame()
     glm::mat4 finalMatrix = projectionMatrix * viewMatrix;
     glLoadMatrixf(glm::value_ptr(finalMatrix));
     
-    physicsEngine.dumpRenderNoModelview(false);
+    //if (physicsDebugMode)
+    {
+        physicsEngine.dumpRenderNoModelview(false, physicsDebugMode);
+    }
+
+    if (physicsDebugMode)
+    {
+        modelMatrix = glm::mat4();
+        modelMatrix = glm::translate(modelMatrix, player.position);
+        modelMatrix = glm::scale(modelMatrix, glm::vec3(player.radius, player.radius, player.radius));
+        
+        glLoadMatrixf(glm::value_ptr(projectionMatrix * viewMatrix * modelMatrix));
+        cube.render();
+    }
 }

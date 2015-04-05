@@ -271,7 +271,13 @@ GLSimpleMesh createCubeMesh(GLuint textureId, GLfloat textureMaxX, GLfloat textu
     return cube;
 }
 
-void SimplePhysicsEngine::dumpRenderNoModelview(bool overlapGeometry)
+void colorf(glm::vec3 vec)
+{
+    GLfloat color = cos(vec.x + vec.y + vec.z) * 0.25 + 0.6;
+    glColor3f(color, color, color);
+}
+
+void SimplePhysicsEngine::dumpRenderNoModelview(bool overlapGeometry, bool renderCollisions)
 {
     glEnable(GL_COLOR_MATERIAL);
     glDisable(GL_TEXTURE_2D);
@@ -287,17 +293,38 @@ void SimplePhysicsEngine::dumpRenderNoModelview(bool overlapGeometry)
     
     for (const auto& triangle: triangles)
     {
-        glVertex3f(triangle.a.x, triangle.a.y, triangle.a.z);
-        glVertex3f(triangle.b.x, triangle.b.y, triangle.b.z);
-        glVertex3f(triangle.c.x, triangle.c.y, triangle.c.z);
+        if (triangle.collisionType == 0 || !renderCollisions)
+        {
+            colorf(triangle.a);
+            glVertex3f(triangle.a.x, triangle.a.y, triangle.a.z);
+            colorf(triangle.b);
+            glVertex3f(triangle.b.x, triangle.b.y, triangle.b.z);
+            colorf(triangle.c);
+            glVertex3f(triangle.c.x, triangle.c.y, triangle.c.z);
+        }
+        else
+        {   
+            glColor3f(0.2f, 0.8f, 0);
+            
+            glVertex3f(triangle.a.x, triangle.a.y, triangle.a.z);
+            glVertex3f(triangle.b.x, triangle.b.y, triangle.b.z);
+            glVertex3f(triangle.c.x, triangle.c.y, triangle.c.z);
+        }
     }
     
     glEnd();
     glDisable(GL_POLYGON_OFFSET_FILL);
+    
+    // otherwise it would blend, dunno why
+    glColor3f(1, 1, 1);
+    glDisable(GL_COLOR_MATERIAL);
 }
 
 void PhysicalBody::easyMove(MovementType type, double speed, double dt)
 {
+    //if (abs(yAccel < 1e-3) return;
+    speed = currentWalkSpeed;
+    
     switch (type)
     {
         case MovementType::STRAFE_LEFT:
@@ -337,18 +364,43 @@ void SimplePhysicsEngine::processPhysics()
 
 void SimplePhysicsEngine::processBody(PhysicalBody& body)
 {
+    enableGravity = true;
+    
+    body.newWalkSpeed = 1e3;
+    
+    body.position += glm::vec3(0, body.yAccel, 0);
+    
+    body.yAccel -= 0.003;
+    //if (body.yAccel < 0) body.yAccel = 0;
+    
+    const double minYaccel = -0.07;
+    if (body.yAccel < minYaccel) body.yAccel = minYaccel;
+    
+    for (PhysicalTriangle& triangle: triangles)
+    {
+        triangle.collisionType = 0;
+        processBodyTriangle(body, triangle, true, 1);
+    }
+    
     for (const PhysicalTriangle& triangle: triangles)
     {
-        processBodyTriangle(body, triangle);
         processBodySegment(body, triangle.a, triangle.b);
         processBodySegment(body, triangle.b, triangle.c);
         processBodySegment(body, triangle.c, triangle.a);
     }
     
-    body.position += glm::vec3(0, -0.1, 0);
+    if (body.newWalkSpeed < 1e3)
+    {
+        body.currentWalkSpeed = body.newWalkSpeed;
+    }
     
-    for (const PhysicalTriangle& triangle: triangles)
-        processBodyTriangle(body, triangle);
+    //if (false)
+    
+    //if (enableGravity)
+    //body.position += glm::vec3(0, -gravity, 0);
+    
+    //for (PhysicalTriangle& triangle: triangles)
+    //    processBodyTriangle(body, triangle, false, 3);
 }
 
 double absTriangleSquare(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c)
@@ -395,14 +447,18 @@ void SimplePhysicsEngine::processBodySegment(PhysicalBody& body, glm::vec3 a, gl
     {
         glm::vec3 projection = a + (GLfloat)(tProjected / glm::length2(b - a)) * (b - a);
         //printf("got %lf %lf\n", glm::length(body.position - projection), distance);
+        fflush(stdout);
         assert(abs(glm::length(body.position - projection) - distance) < 1e-3);
         
+        double inside = (body.radius - distance) / body.radius;
+        
         glm::vec3 fixVector = body.position - projection;
-        body.position = body.position + fixVector * (GLfloat)((body.radius - distance) / body.radius);
+        if (abs(inside) > 0.001)
+            body.position = body.position + fixVector * (GLfloat)((body.radius - distance) / body.radius);
     }
 }
 
-void SimplePhysicsEngine::processBodyTriangle(PhysicalBody& body, const PhysicalTriangle& triangle)
+void SimplePhysicsEngine::processBodyTriangle(PhysicalBody& body, PhysicalTriangle& triangle, bool climb, int pass)
 {
     // if projects on triangle
     //   calculate distance to plane
@@ -429,11 +485,99 @@ void SimplePhysicsEngine::processBodyTriangle(PhysicalBody& body, const Physical
             
         if (intersection)
         {
-            //printf("collision with %f %f %f\n", triangle.a.x, triangle.a.y, triangle.a.z);
-            if (distance > 0)
-                body.position += normal * (GLfloat)(body.radius - distance);
+            //printf("collision with %f %f %f\n", triangle.a.x, triangle.цa.y, triangle.a.z);
+            
+#if 0
+            if (false && triangle.climbSpeed > 1e-3)
+            {
+                /*while (intersection)
+                {
+                //if (climb)
+                    body.position += glm::vec3(0, 0.2, 0) * (GLfloat)(triangle.climbSpeed * (body.radius - distance));
+                    distance = glm::dot(normal, body.position) + D;
+                    projection = body.position - normal * (GLfloat)distance;
+                    intersection = pointInTriangle(projection, triangle);
+                }*/
+                
+                double inside = 0;
+                
+                if (distance > 0)
+                    inside = (body.radius - distance);
+                else
+                    inside = -body.radius - distance;
+                
+                printf("good normal offset %lf\n", inside);
+                
+                body.position += normal * (GLfloat)inside;
+                body.position += glm::vec3(0, 10, 0) * (GLfloat)abs(inside);
+                printf("up %lf\n", inside);
+                    
+                /*int nIts = 0;
+                while (true)
+                {
+                    nIts++;
+                    body.position += glm::vec3(0, 0.001, 0) * (GLfloat)inside;
+                    //body.position += glm::vec3(0, 0.1, 0);
+                    
+                    triangle.collisionType += 1;
+                    
+                    distance = glm::dot(normal, body.position) + D;
+                    if (abs(distance) >= body.radius - 1e-3 || nIts > 2000) break;
+                }*/
+                
+                enableGravity = false;
+                
+                triangle.collisionType += 1;
+            }
             else
-                body.position += normal * (GLfloat)(-body.radius - distance);
+#endif
+            {
+                //printf("yaccel %lf\n", body.yAccel);
+                
+                double inside = 0;
+                
+                if (distance > 0)
+                    inside = (body.radius - distance);
+                else
+                    inside = -body.radius - distance;
+                
+                if (triangle.isClimber > 1e-3 && body.yAccel >= -1e-3 && abs(inside) > 0.001)
+                    body.yAccel = 0.035;
+                
+                if (abs(inside) > 0.001)
+                    body.position += normal * (GLfloat)inside * 0.95f;
+                //printf("bad normal offset %lf from face %lf %lf %lf (normal %lf %lf %lf)\n", inside, triangle.a.y, triangle.b.y, triangle.c.y, normal.x, normal.y, normal.z);
+                //body.position += glm::vec3(0, 0.1, 0);
+                
+                if (triangle.walkingSpeed > 1e-3)
+                    body.newWalkSpeed = min(body.newWalkSpeed, triangle.walkingSpeed);
+                //body.currentWalkSpeed = max(body.currentWalkSpeed, triangle.walkSpeed);
+                
+                if (abs(abs(normal.y) - 1) < 1e-3 && body.yAccel < 0)
+                    body.yAccel = 0;
+                    //enableGravity = false;
+                //printf("yaccel %lf\n", body.yAccel);
+                
+                //SDL_assert(triangle.collisionType != 1);
+                
+                triangle.collisionType += 2;
+            }
+        }
+    }
+}
+
+void GLSimpleMesh::extractPhysicalTriangles(vector<PhysicalTriangle>& physicalTriangles)
+{
+    for (GLSimpleFace& face: faces)
+    {
+        if (!face.isCollisionActive) continue;
+        
+        for (unsigned i = 2; i < face.vertices.size(); i++)
+        {
+            PhysicalTriangle triangle = { face.vertices[0], face.vertices[i - 1], face.vertices[i] };
+            triangle.isClimber = face.isClimber;
+            triangle.walkingSpeed = face.walkingSpeed;
+            physicalTriangles.push_back(triangle);
         }
     }
 }

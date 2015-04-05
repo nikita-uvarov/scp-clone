@@ -49,6 +49,19 @@ public :
     GLuint textureId;
     std::vector<glm::vec3> vertices;
     std::vector<glm::vec2> textureCoords;
+    
+    bool isCollisionActive;
+    double walkingSpeed;
+    bool isClimber;
+};
+
+class PhysicalTriangle
+{
+public :
+    glm::vec3 a, b, c;
+    double walkingSpeed;
+    int collisionType;
+    bool isClimber;
 };
 
 class GLSimpleMesh
@@ -60,16 +73,13 @@ public :
     // may sort faces
     void decomposeIntoSingleTextureMeshes();
     
+    void extractPhysicalTriangles(std::vector<PhysicalTriangle>& physicalTriangles);
+    
     void render() const;
 };
 
 GLSimpleMesh createCubeMesh(GLuint textureId, GLfloat textureMaxX = 1.0f, GLfloat textureMaxY = 1.0f);
 
-class PhysicalTriangle
-{
-public :
-    glm::vec3 a, b, c;
-};
 
 enum class MovementType
 {
@@ -86,23 +96,31 @@ public :
     glm::vec3 direction;
     double radius;
     
+    double yAccel;
+    double currentWalkSpeed;
+    double newWalkSpeed;
+    
     void easyMove(MovementType type, double speed, double dt);
 };
 
 // a no-acceleration physics engine
 class SimplePhysicsEngine
 {
+    bool enableGravity;
+    
     void processBody(PhysicalBody& body);
-    void processBodyTriangle(PhysicalBody& body, const PhysicalTriangle& triangle);
+    void processBodyTriangle(PhysicalBody& body, PhysicalTriangle& triangle, bool climb, int pass = 0);
     void processBodySegment(PhysicalBody& body, glm::vec3 a, glm::vec3 b);
     
 public :
     std::vector<PhysicalTriangle> triangles;
     std::vector<PhysicalBody*> physicalBodies;
+ 
+    double gravity;
     
     void processPhysics();
     
-    void dumpRenderNoModelview(bool overlapGeometry);
+    void dumpRenderNoModelview(bool overlapGeometry, bool renderCollisions);
 };
 
 #endif // GL_UTILS_H

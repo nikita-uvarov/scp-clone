@@ -44,6 +44,11 @@ class GameController : public IGameController
     
     std::set<SDL_Keycode> pressedKeys;
     
+    bool firstPersonMode;
+    bool wireframeMode;
+    bool fogEnabled;
+    bool physicsDebugMode;
+    
     //glm::vec3 playerPosition;
     PhysicalBody player;
     glm::vec3 cameraVector;

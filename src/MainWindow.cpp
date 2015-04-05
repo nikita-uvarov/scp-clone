@@ -36,6 +36,8 @@ void MainWindow::startMainLoop()
     
     double elementaryLogicTicks = 1000.0 / 60.0;
     
+    //elementaryLogicTicks = 1000.0 / 5.0;
+    
 	while (isMainLoopRunning)
 	{
 		framesRendered++;

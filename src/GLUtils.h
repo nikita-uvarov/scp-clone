@@ -7,6 +7,7 @@
 #include "glm/glm.hpp"
 
 #include <vector>
+#include <string>
 
 class GLTexture
 {
@@ -55,7 +56,7 @@ public :
     bool isClimber;
 };
 
-class PhysicalTriangle
+/*class PhysicalTriangle
 {
 public :
     glm::vec3 a, b, c;
@@ -63,19 +64,30 @@ public :
     int collisionType;
     bool isClimber;
 };
+*/
+
+class MeshMarker
+{
+public :
+    std::string name;
+    glm::vec3 position, direction;
+};
 
 class GLSimpleMesh
 {
 public :
     std::vector<GLSimpleFace> faces;
     std::vector<GLSingleTextureMesh> singleTextureMeshDecomposition;
+    std::vector<MeshMarker> markers;
     
     // may sort faces
     void decomposeIntoSingleTextureMeshes();
     
-    void extractPhysicalTriangles(std::vector<PhysicalTriangle>& physicalTriangles);
+    //void extractPhysicalTriangles(std::vector<PhysicalTriangle>& physicalTriangles);
     
     void render() const;
+    
+    MeshMarker getObligatoryMarker(std::string name);
 };
 
 class GLPositionedMesh
@@ -83,8 +95,10 @@ class GLPositionedMesh
 public :
     GLSimpleMesh* baseMesh;
     
+    glm::mat4 modelMatrix;
+    
     // inverse matrix is used in physics calculations
-    glm::mat4 modelMatrix, inverseModelMatrix;
+    //glm::mat4 inverseModelMatrix;
 };
 
 enum class MovementType

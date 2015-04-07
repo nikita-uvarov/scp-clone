@@ -37,6 +37,11 @@ protected :
         transformStack.back() = glm::translate(transformStack.back(), glm::vec3((GLfloat)x, (GLfloat)y, (GLfloat)z));
     }
     
+    void rotate(double radians, glm::vec3 axis)
+    {
+        transformStack.back() = glm::rotate(transformStack.back(), (GLfloat)radians, axis);
+    }
+    
     void scale(double x, double y, double z)
     {
         transformStack.back() = glm::scale(transformStack.back(), glm::vec3((GLfloat)x, (GLfloat)y, (GLfloat)z));
@@ -112,9 +117,22 @@ protected :
     
     void finishFace()
     {
-        assert(currentFace.textureCoords.size() == currentFace.vertices.size());
+        SDL_assert(currentFace.vertices.size() > 2);
+        SDL_assert(currentFace.textureCoords.size() == currentFace.vertices.size());
         currentMesh->faces.push_back(currentFace);
         initializeCurrentFace();
+    }
+    
+    void markCurrentPosition(std::string name)
+    {
+        const glm::mat4& currentMatrix = transformStack.back();
+        
+        MeshMarker marker;
+        marker.name = name;
+        marker.direction = glm::vec3(currentMatrix * glm::vec4(0, 0, -1, 0));
+        marker.position = glm::vec3(currentMatrix * glm::vec4(0, 0, 0, 1));
+        
+        currentMesh->markers.push_back(marker);
     }
     
     void finishMesh()
@@ -129,6 +147,11 @@ protected :
     // texCoords ( { }, { }, { } )
     // makeClimber, makeCollisionInactive, setWalkingSpeed
     // finishFace
+    
+    // handy quad adding functions for quads parallel to XY, YZ or ZX
+    
+    void addQuad(glm::vec3 a, glm::vec3 b, double textureScale = 0.0);
+    
 public :
     
     StateMachineMeshEditor(SimpleTextureManager& textureManager): textureManager(textureManager) {}

@@ -1,17 +1,28 @@
 #include "GameController.h"
 
+#include <glm/gtx/vector_angle.hpp>
+
 #include <iostream>
 #include <vector>
 #include <algorithm>
 
 using namespace std;
 
-GLSimpleMesh createFloorMesh()
-{
-    
-}
-
 GameController::GameController(): meshCollection(textureManager) {}
+
+// gets 'shortest rotation' (without 'spinning')
+glm::mat4 getRotationMatrix(glm::vec3 from, glm::vec3 to)
+{
+    glm::mat4 rotation;
+    
+    glm::vec3 axis = glm::cross(from, to);
+    if (glm::length(axis) < 1e-3)
+        return rotation;
+    
+    double angle = glm::orientedAngle(from, to, axis);
+    rotation = glm::rotate(rotation, (GLfloat)angle, axis);
+    return rotation;
+}
 
 void GameController::initializeGraphics(int width, int height)
 {
@@ -35,7 +46,32 @@ void GameController::initializeGraphics(int width, int height)
         //cubePositions.push_back(glm::vec3(3, 0, z));
     }
     
-    worldContainer.addPositionedMesh(meshCollection.staircase, glm::vec3());
+    glm::mat4 currentModelview;
+    glm::vec3 currentPosition;
+    glm::vec3 currentDirection(0, 0, -1);
+    
+    for (int i = 0; i < 2; i++)
+    {
+        GLSimpleMesh& simpleMesh = meshCollection.staircase;
+        
+        GLPositionedMesh positioned;
+        positioned.baseMesh = &simpleMesh;
+        positioned.modelMatrix = currentModelview;
+        
+        worldContainer.positionedMeshes.push_back(positioned);
+        
+        MeshMarker continuation = simpleMesh.getObligatoryMarker("continuation-point");
+        continuation.direction = glm::vec3(currentModelview * glm::vec4(continuation.direction, 0));
+        continuation.position = glm::vec3(currentModelview * glm::vec4(continuation.position, 1));
+        
+        currentModelview = glm::translate(currentModelview, continuation.position - currentPosition);
+        currentModelview = currentModelview * getRotationMatrix(currentDirection, continuation.direction);
+        
+        currentPosition = continuation.position;
+        currentDirection = continuation.direction;
+        
+        //worldContainer.addPositionedMesh(meshCollection.staircase, glm::vec3());
+    }
     
     //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, -5), glm::vec3(5, -1, 5), 1 });
     //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, 5), glm::vec3(-5, -1, 5), 1 });
@@ -121,10 +157,25 @@ void GameController::initializeGraphics(int width, int height)
     currentHeight = height;
     
     cameraVector = glm::vec3(0, 0, -1);
-    player.position = glm::vec3(0, 0, 0);
+    player.position = glm::vec3(0, 0.5, 0);
     player.radius = 0.2;
+    //player.radius = 0.05;
     player.currentWalkSpeed = 1;
     updatePlayerDirection();
+    
+    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    const char *fs_source =
+    "#version 120           \n"
+    "void main(void) {        "
+    "  gl_FragColor[0] = 0.0; "
+    "  gl_FragColor[1] = 0.0; "
+    "  gl_FragColor[2] = 1.0; "
+    "}";
+    int compile_ok;
+    glShaderSource(fragmentShader, 1, &fs_source, NULL);
+    glCompileShader(fragmentShader);
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &compile_ok);
+    SDL_assert(compile_ok);
     
     //physicsEngine.physicalBodies.push_back(&player);
 
@@ -250,12 +301,12 @@ void GameController::renderFrame()
     
     if (fogEnabled)
     {
-        glFogi(GL_FOG_MODE, GL_EXP);
+        glFogi(GL_FOG_MODE, GL_LINEAR);
         glFogfv(GL_FOG_COLOR, glm::value_ptr(glm::vec3(0, 0, 0)));
-        glFogf(GL_FOG_DENSITY, 1.00f);
+        glFogf(GL_FOG_DENSITY, 1.0f);
         glHint(GL_FOG_HINT, GL_DONT_CARE);
-        glFogf(GL_FOG_START, 1.0f);
-        glFogf(GL_FOG_END, 1.5f);
+        glFogf(GL_FOG_START, 1.5f);
+        glFogf(GL_FOG_END, 3.0f);
         glEnable(GL_FOG);
     }
     else
@@ -293,7 +344,7 @@ void GameController::renderFrame()
     //if (physicsDebugMode)
     {
         //physicsEngine.dumpRenderNoModelview(false, physicsDebugMode);
-        worldContainer.dumpRenderPhysics(player);
+        //worldContainer.dumpRenderPhysics(player);
     }
 
     if (physicsDebugMode)

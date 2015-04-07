@@ -532,7 +532,7 @@ void CharacterController::processCollisionsAgainstTriangle(GLSimpleFace& generat
     }
 }
 
-void GLSimpleMesh::extractPhysicalTriangles(vector<PhysicalTriangle>& physicalTriangles)
+/*void GLSimpleMesh::extractPhysicalTriangles(vector<PhysicalTriangle>& physicalTriangles)
 {
     for (GLSimpleFace& face: faces)
     {
@@ -546,15 +546,14 @@ void GLSimpleMesh::extractPhysicalTriangles(vector<PhysicalTriangle>& physicalTr
             physicalTriangles.push_back(triangle);
         }
     }
-}
+}*/
 
 void SimpleWorldContainer::addPositionedMesh(GLSimpleMesh& baseMesh, glm::vec3 position)
 {
     GLPositionedMesh mesh = GLPositionedMesh();
-    mesh.modelMatrix = mesh.inverseModelMatrix = glm::mat4();
     mesh.baseMesh = &baseMesh;
     mesh.modelMatrix = glm::translate(mesh.modelMatrix, position);
-    mesh.inverseModelMatrix = glm::translate(mesh.inverseModelMatrix, -position);
+    //mesh.inverseModelMatrix = glm::translate(mesh.inverseModelMatrix, -position);
     
     //dumpMatrix(mesh.modelMatrix);
     
@@ -585,3 +584,18 @@ void SimpleWorldContainer::dumpRenderPhysics(CharacterController& controller)
         controller.dumpRenderCollisionsAgainstMesh(mesh);
 }
 
+MeshMarker GLSimpleMesh::getObligatoryMarker(string name)
+{
+    MeshMarker* found = nullptr;
+    
+    for (MeshMarker& m: markers)
+        if (m.name == name)
+        {
+            // multiple markers, 'obligatory' implies single
+            SDL_assert(!found);
+            found = &m;
+        }
+        
+    SDL_assert(found);
+    return *found;
+}

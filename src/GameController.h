@@ -65,6 +65,8 @@ class GameController : public IGameController
     SimpleTextureManager textureManager;
     ScpMeshCollection meshCollection;
     
+    GLuint fragmentShader;
+    
     void updatePlayerDirection();
 public :
     GameController();

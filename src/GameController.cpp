@@ -47,10 +47,9 @@ void GameController::initializeGraphics(int width, int height)
     }
     
     glm::mat4 currentModelview;
-    glm::vec3 currentPosition;
-    glm::vec3 currentDirection(0, 0, -1);
+    glm::vec3 viewDirection(0, 0, -1);
     
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < 10; i++)
     {
         GLSimpleMesh& simpleMesh = meshCollection.staircase;
         
@@ -61,16 +60,9 @@ void GameController::initializeGraphics(int width, int height)
         worldContainer.positionedMeshes.push_back(positioned);
         
         MeshMarker continuation = simpleMesh.getObligatoryMarker("continuation-point");
-        continuation.direction = glm::vec3(currentModelview * glm::vec4(continuation.direction, 0));
-        continuation.position = glm::vec3(currentModelview * glm::vec4(continuation.position, 1));
         
-        currentModelview = glm::translate(currentModelview, continuation.position - currentPosition);
-        currentModelview = currentModelview * getRotationMatrix(currentDirection, continuation.direction);
-        
-        currentPosition = continuation.position;
-        currentDirection = continuation.direction;
-        
-        //worldContainer.addPositionedMesh(meshCollection.staircase, glm::vec3());
+        currentModelview = glm::translate(currentModelview, continuation.position);
+        currentModelview = currentModelview * getRotationMatrix(viewDirection, continuation.direction);
     }
     
     //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, -5), glm::vec3(5, -1, 5), 1 });
@@ -163,19 +155,7 @@ void GameController::initializeGraphics(int width, int height)
     player.currentWalkSpeed = 1;
     updatePlayerDirection();
     
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    const char *fs_source =
-    "#version 120           \n"
-    "void main(void) {        "
-    "  gl_FragColor[0] = 0.0; "
-    "  gl_FragColor[1] = 0.0; "
-    "  gl_FragColor[2] = 1.0; "
-    "}";
-    int compile_ok;
-    glShaderSource(fragmentShader, 1, &fs_source, NULL);
-    glCompileShader(fragmentShader);
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &compile_ok);
-    SDL_assert(compile_ok);
+    reloadShaders();
     
     //physicsEngine.physicalBodies.push_back(&player);
 
@@ -188,6 +168,46 @@ void GameController::initializeGraphics(int width, int height)
 	glShadeModel(GL_SMOOTH);
     
 	glMatrixMode(GL_MODELVIEW);
+}
+
+void GameController::reloadShaders()
+{
+    if (vertexShader)
+    {
+        glDeleteShader(vertexShader);
+        vertexShader = 0;
+    }
+    
+    if (fragmentShader)
+    {
+        glDeleteShader(fragmentShader);
+        fragmentShader = 0;
+    }
+    
+    if (shaderProgram)
+    {
+        glUseProgram(0);
+        glDeleteProgram(shaderProgram);
+        shaderProgram = 0;
+    }
+    
+    string defineString = "";
+    for (auto& it: shaderDefines)
+        defineString += "#define " + it + "\n";
+    
+    vertexShader = loadGlShader("resources/vertex-shader.glsl", GL_VERTEX_SHADER, defineString.c_str());
+    fragmentShader = loadGlShader("resources/fragment-shader.glsl", GL_FRAGMENT_SHADER, defineString.c_str());
+    
+    shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    
+    GLint linkOk;
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &linkOk);
+    SDL_assert(linkOk);
+    
+    glUseProgram(shaderProgram);
 }
 
 void GameController::updatePlayerDirection()
@@ -254,7 +274,16 @@ void GameController::keyReleased(SDL_Keycode keycode)
         physicsDebugMode = !physicsDebugMode;
     
     if (keycode == SDLK_f)
+    {
         fogEnabled = !fogEnabled;
+        
+        if (fogEnabled)
+            shaderDefines.insert("FOG");
+        else
+            shaderDefines.erase("FOG");
+        
+        reloadShaders();
+    }
 }
 
 void GameController::relativeMouseMotion(int dx, int dy)
@@ -299,7 +328,7 @@ void GameController::renderFrame()
     modelMatrix = glm::rotate(modelMatrix, angle, glm::vec3(sin(angle), sin(angle + 2 * M_PI / 3), sin(angle + M_PI / 3)));
     modelMatrix = glm::scale(modelMatrix, glm::vec3(2, 2, 2));
     
-    if (fogEnabled)
+    /*if (fogEnabled)
     {
         glFogi(GL_FOG_MODE, GL_LINEAR);
         glFogfv(GL_FOG_COLOR, glm::value_ptr(glm::vec3(0, 0, 0)));
@@ -312,7 +341,7 @@ void GameController::renderFrame()
     else
     {
         glDisable(GL_FOG);
-    }
+    }*/
     
     if (wireframeMode)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);

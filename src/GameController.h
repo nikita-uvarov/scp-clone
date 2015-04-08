@@ -7,12 +7,16 @@
 #include "IGameController.h"
 #include "GLUtils.h"
 #include "ScpMeshCollection.h"
+#include "ShaderUtils.h"
 
 #include "glm/glm.hpp"
 #include "glm/gtx/transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
 #include <set>
+
+// FPS measures:
+// 1. Pre shader migration: ~300 FPS (2 stair blocks, 16 or so cubes)
 
 // TODO:
 // 1. world simulation: the problem arises when FPS is lower than required number of simulations per second.
@@ -65,7 +69,12 @@ class GameController : public IGameController
     SimpleTextureManager textureManager;
     ScpMeshCollection meshCollection;
     
-    GLuint fragmentShader;
+    std::set<std::string> shaderDefines;
+    
+    GLuint vertexShader, fragmentShader;
+    GLuint shaderProgram;
+    
+    void reloadShaders();
     
     void updatePlayerDirection();
 public :

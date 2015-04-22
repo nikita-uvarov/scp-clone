@@ -33,7 +33,7 @@ void GLSingleTextureMesh::render() const
     {
         const vec3& vertex = vertices[triangleIndices[i]];
         const vec2& texCoords = textureCoords[triangleIndices[i]];
-        glTexCoord2d(texCoords.x, 1 - texCoords.y);
+        glTexCoord2d(texCoords.x, texCoords.y);
         glVertex3d(vertex.x, vertex.y, vertex.z);
     }
     

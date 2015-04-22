@@ -24,8 +24,8 @@ unique_ptr<Texture> createTextureFromSurface(SDL_Surface* surface)
     
     texture.extendedWidth = extendToPowerOfTwo(texture.originalWidth);
     texture.extendedHeight = extendToPowerOfTwo(texture.originalHeight);
-
-	SDL_Surface* image = SDL_CreateRGBSurface(SDL_SWSURFACE, texture.originalWidth, texture.originalHeight,
+    
+	SDL_Surface* image = SDL_CreateRGBSurface(SDL_SWSURFACE, texture.extendedWidth, texture.extendedHeight,
                                               32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
 	if (image == nullptr)
         return texturePtr;
@@ -33,17 +33,18 @@ unique_ptr<Texture> createTextureFromSurface(SDL_Surface* surface)
 	SDL_BlendMode saved_mode;
 	SDL_GetSurfaceBlendMode(surface, &saved_mode);
 	SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
-
-	SDL_Rect all = { 0, 0, texture.originalWidth, texture.originalHeight };
-	SDL_BlitSurface(surface, &all, image, &all);
-
+    
+	SDL_Rect src = { 0, 0, texture.originalWidth, texture.originalHeight };
+	SDL_Rect dst = { 0, 0 };
+	SDL_BlitSurface(surface, &src, image, &dst);
+    
 	SDL_SetSurfaceBlendMode(surface, saved_mode);
 
 	glGenTextures(1, &texture.openglId);
 	glBindTexture(GL_TEXTURE_2D, texture.openglId);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.originalWidth, texture.originalWidth, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.extendedWidth, texture.extendedHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
 	SDL_FreeSurface(image);
 
 	return texturePtr;

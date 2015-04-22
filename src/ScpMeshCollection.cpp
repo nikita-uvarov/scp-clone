@@ -68,8 +68,8 @@ GLSimpleMesh createCubeMesh(GLuint textureId, ftype textureMaxX, ftype textureMa
                         face.vertices.push_back(cubeVerts[indices[t]]);
                         
                         face.textureCoords.push_back(glm::vec2(
-                            (t == 1 || t == 2) ? 1 - textureMaxX : 1,
-                            (t == 2 || t == 3) ? 1 - textureMaxY : 1));
+                            (t == 1 || t == 2) ? textureMaxX : 0,
+                            (t == 2 || t == 3) ? textureMaxY : 0));
                     }
                     
                     cube.faces.push_back(face);
@@ -466,15 +466,15 @@ GLSimpleMesh sge::loadColladaMesh(const char* colladaFileName)
         
         GLSingleTextureMesh submesh;
         
-        GLuint currentTexture = TextureManager::instance().retrieveTexture(texturePath).openglId;
-        submesh.textureId = currentTexture;
+        const Texture& currentTexture = TextureManager::instance().retrieveTexture(texturePath);
+        submesh.textureId = currentTexture.openglId;
         
         int perVertex = (int)indices.size() / (nFaces * vertexCounts[0]);
         int currentOffset = 0;
         for (int i = 0; i < nFaces; i++)
         {
             GLSimpleFace face;
-            face.textureId = currentTexture;
+            face.textureId = currentTexture.openglId;
             face.isCollisionActive = false;
             face.isClimber = false;
             face.walkingSpeed = 1.0;
@@ -488,7 +488,13 @@ GLSimpleMesh sge::loadColladaMesh(const char* colladaFileName)
                 face.vertices.push_back(vec3(*base, *(base + 2), -*(base + 1)));
                 
                 ftype* textureBase = texcoordsFrom->data() + indices[currentOffset + texcoordOffset] * 2;
-                face.textureCoords.push_back(glm::vec2(*textureBase, *(textureBase + 1)));
+                
+                ftype u = *textureBase * currentTexture.getMaxU();
+                ftype v = (1 - *(textureBase + 1)) * currentTexture.getMaxV();
+                
+                //printf("tex coord %f %f\n", u, v);
+                
+                face.textureCoords.push_back(glm::vec2(u, v));
                 
                 submesh.vertices.push_back(face.vertices.back());
                 submesh.textureCoords.push_back(face.textureCoords.back());

@@ -20,14 +20,16 @@ set(opengl-test-sources
 	src/main.cpp
 	src/MainWindow.cpp
 	src/GameController.cpp
-	src/GLUtils.cpp)
+	src/GLUtils.cpp
+	src/ScpMeshCollection.cpp)
 
 set(opengl-test-headers
     src/MainWindow.h
     src/IGameController.h
     src/GameController.h
     src/GLUtils.h
-    src/SDLUtils.h)
+    src/SDLUtils.h
+    src/ScpMeshCollection.h)
 
 add_executable(opengl-test ${opengl-test-sources})
 

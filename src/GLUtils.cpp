@@ -3,6 +3,8 @@
 #include "SDL_image.h"
 
 #include <glm/gtx/norm.hpp>
+#include "glm/gtx/transform.hpp"
+#include "glm/gtc/type_ptr.hpp"
 
 #include <set>
 #include <cmath>
@@ -80,6 +82,7 @@ bool GLSingleTextureMesh::checkIndices()
 
 void GLSingleTextureMesh::render() const
 {   
+    glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, textureId);
     glBegin(GL_TRIANGLES);
     
@@ -206,78 +209,13 @@ void GLSimpleMesh::decomposeIntoSingleTextureMeshes()
     }
 }
 
-GLSimpleMesh createCubeMesh(GLuint textureId, GLfloat textureMaxX, GLfloat textureMaxY)
-{
-    GLSimpleMesh cube;
-    
-    vector<glm::vec3> cubeVerts;
-    
-    for (int x = -1; x <= 1; x += 2)
-        for (int y = -1; y <= 1; y += 2)
-            for (int z = -1; z <= 1; z += 2)
-                cubeVerts.push_back(glm::vec3(x, y, z));
-            
-    assert(cubeVerts.size() == 8);
-    
-    for (int i = 0; i < 8; i++)
-        for (int j = i + 1; j < 8; j++)
-            for (int k = j + 1; k < 8; k++)
-                for (int l = k + 1; l < 8; l++)
-                {
-                    glm::mat3x3 inPlane;
-                    inPlane[0] = cubeVerts[j] - cubeVerts[i];
-                    inPlane[1] = cubeVerts[k] - cubeVerts[i];
-                    inPlane[2] = cubeVerts[l] - cubeVerts[i];
-                    
-                    if (glm::abs(glm::determinant(inPlane)) > 1e-5)
-                        continue;
-                    
-                    vector<int> indices;
-                    indices.push_back(i);
-                    indices.push_back(j);
-                    indices.push_back(k);
-                    indices.push_back(l);
-                    
-                    bool found = false;
-                    
-                    do
-                    {
-                        if (glm::length(cubeVerts[indices[0]] - cubeVerts[indices[2]]) < 2.1) continue;
-                        if (glm::length(cubeVerts[indices[1]] - cubeVerts[indices[3]]) < 2.1) continue;
-                        
-                        found = true;
-                        break;
-                    }
-                    while (next_permutation(indices.begin(), indices.end()));
-                    
-                    if (glm::length(glm::cross(glm::vec3(cubeVerts[indices[1]] - cubeVerts[indices[0]]), glm::vec3(cubeVerts[indices[3]] - cubeVerts[indices[0]]))) > 4.1)
-                        continue;
-                    
-                    assert(found);
-                    
-                    GLSimpleFace face;
-                    face.textureId = textureId;
-                    for (int t = 0; t < 4; t++)
-                    {
-                        face.vertices.push_back(cubeVerts[indices[t]]);
-                        face.textureCoords.push_back(glm::vec2(
-                            (t == 1 || t == 2) ? textureMaxX : 0,
-                            (t == 2 || t == 3) ? textureMaxY : 0));
-                    }
-                    
-                    cube.faces.push_back(face);
-                }
-        
-    return cube;
-}
-
 void colorf(glm::vec3 vec)
 {
-    GLfloat color = cos(vec.x + vec.y + vec.z) * 0.25 + 0.6;
+    GLfloat color = cos(vec.x + vec.y + vec.z) * 0.25f + 0.6f;
     glColor3f(color, color, color);
 }
 
-void SimplePhysicsEngine::dumpRenderNoModelview(bool overlapGeometry, bool renderCollisions)
+/*void SimplePhysicsEngine::dumpRenderNoModelview(bool overlapGeometry, bool renderCollisions)
 {
     glEnable(GL_COLOR_MATERIAL);
     glDisable(GL_TEXTURE_2D);
@@ -318,9 +256,9 @@ void SimplePhysicsEngine::dumpRenderNoModelview(bool overlapGeometry, bool rende
     // otherwise it would blend, dunno why
     glColor3f(1, 1, 1);
     glDisable(GL_COLOR_MATERIAL);
-}
+}*/
 
-void PhysicalBody::easyMove(MovementType type, double speed, double dt)
+void CharacterController::easyMove(MovementType type, double speed, double dt)
 {
     //if (abs(yAccel < 1e-3) return;
     speed = currentWalkSpeed;
@@ -356,30 +294,121 @@ void PhysicalBody::easyMove(MovementType type, double speed, double dt)
     }
 }
 
-void SimplePhysicsEngine::processPhysics()
+/*void SimplePhysicsEngine::processPhysics()
 {
     for (PhysicalBody* body: physicalBodies)
         processBody(*body);
-}
+}*/
 
-void SimplePhysicsEngine::processBody(PhysicalBody& body)
+void CharacterController::applySpeedCorrections()
 {
-    enableGravity = true;
+    if (newWalkSpeed < 1e3)
+    {
+        currentWalkSpeed = newWalkSpeed;
+    }
     
-    body.newWalkSpeed = 1e3;
+    newWalkSpeed = 1e3;
     
-    body.position += glm::vec3(0, body.yAccel, 0);
+    position += glm::vec3(0, yAccel, 0);
     
-    body.yAccel -= 0.003;
-    //if (body.yAccel < 0) body.yAccel = 0;
+    yAccel -= 0.003;
     
     const double minYaccel = -0.07;
-    if (body.yAccel < minYaccel) body.yAccel = minYaccel;
+    if (yAccel < minYaccel) yAccel = minYaccel;
+}
+
+glm::vec4 extendPositionVector(glm::vec3 pos)
+{
+    return glm::vec4(pos.x, pos.y, pos.z, 1);
+}
+
+void dumpMatrix(glm::mat4 m)
+{
+    for (int x = 0; x < 4; x++)
+    {
+        for (int y = 0; y < 4; y++)
+            printf("%.3lf ", m[x][y]);
+        printf("\n");
+    }
+}
+
+void CharacterController::processCollisionsAgainstMesh(GLPositionedMesh& mesh, CollisionPhase phase)
+{
+    //dumpMatrix(mesh.modelMatrix);
+    // TODO: it is probably possible to use commented method of transformations
+    // to achieve faster physics (no double matrix multiplications for each vertex)
+    // though precision losses & jitter may follow
+    //position = glm::vec3(mesh.inverseModelMatrix * extendPositionVector(position));
+    //collisionOccured = false;
+    
+    //printf("matrix %lf %lf %lf\n", mesh.modelMatrix[0][3], mesh.modelMatrix[1][3], mesh.modelMatrix[2][3]);
+    //printf("real pos %lf %lf %lf\n", position.x, position.y, position.z);
+    //printf("eff pos %lf %lf %lf\n", position.x, position.y, position.z);
+    
+    for (GLSimpleFace& face: mesh.baseMesh->faces)
+    {
+        vector<glm::vec3> vertices = face.vertices;
+        for (auto& v: vertices)
+            v = glm::vec3(mesh.modelMatrix * extendPositionVector(v));
+      
+        for (int vertex = 2; vertex < (int)face.vertices.size(); vertex++)
+        {
+            if (phase == CollisionPhase::TRIANGLES)
+                processCollisionsAgainstTriangle(face, vertices, 0, vertex - 1, vertex);
+            else
+            {
+                // FIXME:
+                processCollisionsAgainstSegment(vertices[0], vertices[vertex - 1]);
+                processCollisionsAgainstSegment(vertices[vertex - 1], vertices[vertex]);
+                processCollisionsAgainstSegment(vertices[0], vertices[vertex]);
+            }
+        }
+    }
+    
+    //if (collisionOccured)
+    //    position = glm::vec3(mesh.modelMatrix * extendPositionVector(position));
+}
+
+void CharacterController::dumpRenderCollisionsAgainstMesh(GLPositionedMesh& mesh)
+{
+    glEnable(GL_COLOR_MATERIAL);
+    glDisable(GL_TEXTURE_2D);
+ 
+    if (false)
+        glPolygonOffset(-1, -1);
+    else
+        glPolygonOffset(1, 1);
+    glEnable(GL_POLYGON_OFFSET_FILL);
+    
+    glBegin(GL_TRIANGLES);
+    glColor3f(0.75, 0.75, 0.75);
+    
+    for (GLSimpleFace& face: mesh.baseMesh->faces)
+    {
+        vector<glm::vec3> vertices = face.vertices;
+        for (auto& v: vertices)
+            v = glm::vec3(mesh.modelMatrix * extendPositionVector(v));
+        
+        glBegin(GL_POLYGON);
+        for (auto it: vertices)
+            glVertex3f(it.x, it.y, it.z);
+        glEnd();
+    }
+    
+    glDisable(GL_POLYGON_OFFSET_FILL);
+    
+    // otherwise it would blend, dunno why
+    glColor3f(1, 1, 1);
+    glDisable(GL_COLOR_MATERIAL);
+}
+
+/*void SimplePhysicsEngine::processBody(PhysicalBody& body)
+{
     
     for (PhysicalTriangle& triangle: triangles)
     {
         triangle.collisionType = 0;
-        processBodyTriangle(body, triangle, true, 1);
+        processBodyTriangle(body, triangle);
     }
     
     for (const PhysicalTriangle& triangle: triangles)
@@ -393,28 +422,20 @@ void SimplePhysicsEngine::processBody(PhysicalBody& body)
     {
         body.currentWalkSpeed = body.newWalkSpeed;
     }
-    
-    //if (false)
-    
-    //if (enableGravity)
-    //body.position += glm::vec3(0, -gravity, 0);
-    
-    //for (PhysicalTriangle& triangle: triangles)
-    //    processBodyTriangle(body, triangle, false, 3);
-}
+}*/
 
 double absTriangleSquare(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c)
 {
     return glm::length(glm::cross(b - a, c - a)) * 0.5;
 }
 
-bool pointInTriangle(glm::vec3 point, const PhysicalTriangle& triangle)
+bool pointInTriangle(glm::vec3 point, glm::vec3 a, glm::vec3 b, glm::vec3 c)
 {
-    double square = absTriangleSquare(triangle.a, triangle.b, triangle.c);
+    double square = absTriangleSquare(a, b, c);
     double withPoint =
-        absTriangleSquare(triangle.a, triangle.b, point) +
-        absTriangleSquare(triangle.b, triangle.c, point) +
-        absTriangleSquare(triangle.c, triangle.a, point);
+        absTriangleSquare(a, b, point) +
+        absTriangleSquare(b, c, point) +
+        absTriangleSquare(c, a, point);
         
     if (abs(square - withPoint) < 1e-3)
         return true;
@@ -422,145 +443,90 @@ bool pointInTriangle(glm::vec3 point, const PhysicalTriangle& triangle)
     return false;
 }
 
-/*bool segmentIntersectsCircle(glm::vec3 a, glm::vec3 b, glm::vec3 center, double radius)
+void CharacterController::processCollisionsAgainstSegment(glm::vec3 a, glm::vec3 b)
 {
-    double tProjected = glm::dot(b - a, center - a);
-    if (tProjected < 0 || tProjected > glm::length2(b - a))
-        return false;
-    
-    double distance = absTriangleSquare(a, b, center) / glm::length(b - a) * 2;
-    
-    return distance < radius;
-}*/
-
-void SimplePhysicsEngine::processBodySegment(PhysicalBody& body, glm::vec3 a, glm::vec3 b)
-{
-    double tProjected = glm::dot(b - a, body.position - a);
+    glm::vec3& pos = position;
+    double tProjected = glm::dot(b - a, pos - a);
     if (tProjected < 0 || tProjected > glm::length2(b - a))
         return;
     
-    //printf("cos alpha %lf\n", tProjected / glm::length(b - a) / glm::length(body.position - a));
+    double distance = absTriangleSquare(a, b, pos) / glm::length(b - a) * 2;
     
-    double distance = absTriangleSquare(a, b, body.position) / glm::length(b - a) * 2;
-    
-    if (distance < body.radius)
+    if (distance < radius)
     {
         glm::vec3 projection = a + (GLfloat)(tProjected / glm::length2(b - a)) * (b - a);
-        //printf("got %lf %lf\n", glm::length(body.position - projection), distance);
-        fflush(stdout);
-        assert(abs(glm::length(body.position - projection) - distance) < 1e-3);
+        //printf("got %lf %lf\n", glm::length(pos - projection), distance);
+        //fflush(stdout);
+        assert(abs(glm::length(pos - projection) - distance) < 1e-3);
         
-        double inside = (body.radius - distance) / body.radius;
+        double inside = (radius - distance) / radius;
         
-        glm::vec3 fixVector = body.position - projection;
+        glm::vec3 fixVector = pos - projection;
         if (abs(inside) > 0.001)
-            body.position = body.position + fixVector * (GLfloat)((body.radius - distance) / body.radius);
+        {
+            pos = pos + fixVector * (GLfloat)((radius - distance) / radius);
+            collisionOccured = true;
+        }
     }
 }
 
-void SimplePhysicsEngine::processBodyTriangle(PhysicalBody& body, PhysicalTriangle& triangle, bool climb, int pass)
-{
+void CharacterController::processCollisionsAgainstTriangle(GLSimpleFace& generatingFace, vector< glm::vec3 >& transformedVertices, int i, int j, int k)
+{   
+    const glm::vec3
+        &triangleA = transformedVertices[i],
+        &triangleB = transformedVertices[j],
+        &triangleC = transformedVertices[k];
+    
     // if projects on triangle
     //   calculate distance to plane
     //   if lower then radius
     //     apply normal correction
     
-    glm::vec3 normal = glm::cross(triangle.b - triangle.a, triangle.c - triangle.a);
+    glm::vec3 normal = glm::cross(triangleB - triangleA, triangleC - triangleA);
     normal = glm::normalize(normal);
-    double A = normal.x;
-    double B = normal.y;
-    double C = normal.z;
-    double D = -glm::dot(normal, triangle.a);
     
-    double distance = glm::dot(normal, body.position) + D;
+    // in Ax + By + Cz + D = 0 equation
+    double D = -glm::dot(normal, triangleA);
     
-    if (abs(distance) < body.radius)
+    double distance = glm::dot(normal, position) + D;
+    
+    if (abs(distance) < radius)
     {
         // check that projects onto triangle
         // or one of the sides intersects sphere
         
-        glm::vec3 projection = body.position - normal * (GLfloat)distance;
+        glm::vec3 projection = position - normal * (GLfloat)distance;
         
-        bool intersection = pointInTriangle(projection, triangle);
+        bool intersection = pointInTriangle(projection, triangleA, triangleB, triangleC);
             
         if (intersection)
         {
-            //printf("collision with %f %f %f\n", triangle.a.x, triangle.цa.y, triangle.a.z);
-            
-#if 0
-            if (false && triangle.climbSpeed > 1e-3)
             {
-                /*while (intersection)
-                {
-                //if (climb)
-                    body.position += glm::vec3(0, 0.2, 0) * (GLfloat)(triangle.climbSpeed * (body.radius - distance));
-                    distance = glm::dot(normal, body.position) + D;
-                    projection = body.position - normal * (GLfloat)distance;
-                    intersection = pointInTriangle(projection, triangle);
-                }*/
-                
                 double inside = 0;
                 
                 if (distance > 0)
-                    inside = (body.radius - distance);
+                    inside = (radius - distance);
                 else
-                    inside = -body.radius - distance;
+                    inside = -radius - distance;
                 
-                printf("good normal offset %lf\n", inside);
-                
-                body.position += normal * (GLfloat)inside;
-                body.position += glm::vec3(0, 10, 0) * (GLfloat)abs(inside);
-                printf("up %lf\n", inside);
-                    
-                /*int nIts = 0;
-                while (true)
+                if (generatingFace.isClimber && yAccel >= -0.004 && abs(inside) > 0.001)
                 {
-                    nIts++;
-                    body.position += glm::vec3(0, 0.001, 0) * (GLfloat)inside;
-                    //body.position += glm::vec3(0, 0.1, 0);
-                    
-                    triangle.collisionType += 1;
-                    
-                    distance = glm::dot(normal, body.position) + D;
-                    if (abs(distance) >= body.radius - 1e-3 || nIts > 2000) break;
-                }*/
-                
-                enableGravity = false;
-                
-                triangle.collisionType += 1;
-            }
-            else
-#endif
-            {
-                //printf("yaccel %lf\n", body.yAccel);
-                
-                double inside = 0;
-                
-                if (distance > 0)
-                    inside = (body.radius - distance);
-                else
-                    inside = -body.radius - distance;
-                
-                if (triangle.isClimber > 1e-3 && body.yAccel >= -1e-3 && abs(inside) > 0.001)
-                    body.yAccel = 0.035;
+                    yAccel = 0.035;
+                }
                 
                 if (abs(inside) > 0.001)
-                    body.position += normal * (GLfloat)inside * 0.95f;
-                //printf("bad normal offset %lf from face %lf %lf %lf (normal %lf %lf %lf)\n", inside, triangle.a.y, triangle.b.y, triangle.c.y, normal.x, normal.y, normal.z);
-                //body.position += glm::vec3(0, 0.1, 0);
+                {
+                    position += normal * (GLfloat)inside * 0.95f;
+                    collisionOccured = true;
+                }
                 
-                if (triangle.walkingSpeed > 1e-3)
-                    body.newWalkSpeed = min(body.newWalkSpeed, triangle.walkingSpeed);
-                //body.currentWalkSpeed = max(body.currentWalkSpeed, triangle.walkSpeed);
+                if (generatingFace.walkingSpeed > 1e-3)
+                    newWalkSpeed = min(newWalkSpeed, generatingFace.walkingSpeed);
                 
-                if (abs(abs(normal.y) - 1) < 1e-3 && body.yAccel < 0)
-                    body.yAccel = 0;
-                    //enableGravity = false;
-                //printf("yaccel %lf\n", body.yAccel);
+                if (abs(abs(normal.y) - 1) < 1e-3 && yAccel < 0)
+                    yAccel = 0;
                 
-                //SDL_assert(triangle.collisionType != 1);
-                
-                triangle.collisionType += 2;
+                //generatingFace.collisionType += 2;
             }
         }
     }
@@ -581,3 +547,41 @@ void GLSimpleMesh::extractPhysicalTriangles(vector<PhysicalTriangle>& physicalTr
         }
     }
 }
+
+void SimpleWorldContainer::addPositionedMesh(GLSimpleMesh& baseMesh, glm::vec3 position)
+{
+    GLPositionedMesh mesh = GLPositionedMesh();
+    mesh.modelMatrix = mesh.inverseModelMatrix = glm::mat4();
+    mesh.baseMesh = &baseMesh;
+    mesh.modelMatrix = glm::translate(mesh.modelMatrix, position);
+    mesh.inverseModelMatrix = glm::translate(mesh.inverseModelMatrix, -position);
+    
+    //dumpMatrix(mesh.modelMatrix);
+    
+    positionedMeshes.push_back(mesh);
+}
+
+void SimpleWorldContainer::renderWorld(glm::mat4 projectionViewMatrix)
+{
+    for (GLPositionedMesh& positionedMesh: positionedMeshes)
+    {
+        glLoadMatrixf(glm::value_ptr(projectionViewMatrix * positionedMesh.modelMatrix));
+        positionedMesh.baseMesh->render();
+    }
+}
+
+void SimpleWorldContainer::processPhysics(CharacterController& controller)
+{
+    controller.applySpeedCorrections();
+    
+    for (int t = 0; t < 2; t++)
+        for (GLPositionedMesh& mesh: positionedMeshes)
+            controller.processCollisionsAgainstMesh(mesh, t == 0 ? CollisionPhase::TRIANGLES : CollisionPhase::SEGMENTS);
+}
+
+void SimpleWorldContainer::dumpRenderPhysics(CharacterController& controller)
+{
+    for (GLPositionedMesh& mesh: positionedMeshes)
+        controller.dumpRenderCollisionsAgainstMesh(mesh);
+}
+

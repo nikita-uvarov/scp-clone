@@ -78,8 +78,14 @@ public :
     void render() const;
 };
 
-GLSimpleMesh createCubeMesh(GLuint textureId, GLfloat textureMaxX = 1.0f, GLfloat textureMaxY = 1.0f);
-
+class GLPositionedMesh
+{
+public :
+    GLSimpleMesh* baseMesh;
+    
+    // inverse matrix is used in physics calculations
+    glm::mat4 modelMatrix, inverseModelMatrix;
+};
 
 enum class MovementType
 {
@@ -89,8 +95,20 @@ enum class MovementType
     STRAFE_RIGHT
 };
 
-class PhysicalBody
+enum class CollisionPhase
 {
+    TRIANGLES,
+    SEGMENTS
+};
+
+class CharacterController
+{
+    // might not be a good idea...
+    glm::vec3 effectivePosition;
+    bool collisionOccured;
+    
+    void processCollisionsAgainstTriangle(GLSimpleFace& generatingFace, std::vector<glm::vec3>& transformedVertices, int i, int j, int k);
+    void processCollisionsAgainstSegment(glm::vec3 a, glm::vec3 b);
 public :
     glm::vec3 position;
     glm::vec3 direction;
@@ -101,26 +119,49 @@ public :
     double newWalkSpeed;
     
     void easyMove(MovementType type, double speed, double dt);
+    
+    void applySpeedCorrections();
+    
+    // two passes are required
+    void processCollisionsAgainstMesh(GLPositionedMesh& mesh, CollisionPhase phase);
+    void dumpRenderCollisionsAgainstMesh(GLPositionedMesh& mesh);
 };
 
 // a no-acceleration physics engine
-class SimplePhysicsEngine
+/*class SimplePhysicsEngine
 {
     bool enableGravity;
     
-    void processBody(PhysicalBody& body);
-    void processBodyTriangle(PhysicalBody& body, PhysicalTriangle& triangle, bool climb, int pass = 0);
-    void processBodySegment(PhysicalBody& body, glm::vec3 a, glm::vec3 b);
+    //void processBody(PhysicalBody& body);
+    //void processBodyTriangle(PhysicalBody& body, PhysicalTriangle& triangle);
+    //void processBodySegment(PhysicalBody& body, glm::vec3 a, glm::vec3 b);
     
 public :
     std::vector<PhysicalTriangle> triangles;
-    std::vector<PhysicalBody*> physicalBodies;
- 
-    double gravity;
+    //std::vector<PhysicalBody*> physicalBodies;
     
-    void processPhysics();
+    //void processPhysics();
     
     void dumpRenderNoModelview(bool overlapGeometry, bool renderCollisions);
+};*/
+
+/*class SimpleResourceManager
+{
+public :
+    vector<GLSimpleMesh> meshesLoaded;
+};*/
+
+// simply provides group interface
+class SimpleWorldContainer
+{
+public :
+    std::vector<GLPositionedMesh> positionedMeshes;
+    
+    void addPositionedMesh(GLSimpleMesh& baseMesh, glm::vec3 position);
+    
+    void renderWorld(glm::mat4 projectionViewMatrix);
+    void processPhysics(CharacterController& controller);
+    void dumpRenderPhysics(CharacterController& controller);
 };
 
 #endif // GL_UTILS_H

@@ -6,6 +6,13 @@
 
 using namespace std;
 
+GLSimpleMesh createFloorMesh()
+{
+    
+}
+
+GameController::GameController(): meshCollection(textureManager) {}
+
 void GameController::initializeGraphics(int width, int height)
 {
     firstPersonMode = false;
@@ -13,24 +20,32 @@ void GameController::initializeGraphics(int width, int height)
     physicsDebugMode = true;
     fogEnabled = false;
     
-    texture = loadTexture("resources/brickwall.jpg");
-    cube = createCubeMesh(texture.openglId, texture.getMaxU(), texture.getMaxV());
-    cube.decomposeIntoSingleTextureMeshes();
+    meshCollection.loadMeshes();
+    
+    //texture = loadTexture("resources/verticals.jpg");
+    //cube = createCubeMesh(texture.openglId, texture.getMaxU(), texture.getMaxV());
+    //cube.decomposeIntoSingleTextureMeshes();
     
     for (int z = 5; z >= -20; z -= 3)
     {
-        cubePositions.push_back(glm::vec3(-3, 0, z));
-        cubePositions.push_back(glm::vec3(3, 0, z));
+        for (int t = 0; t < 2; t++)
+            worldContainer.addPositionedMesh(meshCollection.cubeMesh, glm::vec3((t * 2 - 1) * 3, 0, z));
+        
+        //cubePositions.push_back(glm::vec3(-3, 0, z));
+        //cubePositions.push_back(glm::vec3(3, 0, z));
     }
     
-    physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, -5), glm::vec3(5, -1, 5), 1 });
-    physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, 5), glm::vec3(-5, -1, 5), 1 });
+    worldContainer.addPositionedMesh(meshCollection.staircase, glm::vec3());
     
-    GLfloat step = 0.27;
+    //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, -5), glm::vec3(5, -1, 5), 1 });
+    //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, 5), glm::vec3(-5, -1, 5), 1 });
+    
+    GLfloat step = 0.27f;
     GLfloat yOffset = 0, zOffset = 0;
-    GLfloat horizSlope = 0.75;
+    GLfloat horizSlope = 0.75f;
     horizSlope = 0;
     
+#if 0
     int from = (int)physicsEngine.triangles.size();
     
     for (int t = 0; t < 100; t++)
@@ -60,6 +75,9 @@ void GameController::initializeGraphics(int width, int height)
     
     int to = (int)physicsEngine.triangles.size();
     
+#endif
+    
+#if 0
     int nClimbable = 0;
     for (int i = from; i < to; i++)
     {
@@ -77,9 +95,11 @@ void GameController::initializeGraphics(int width, int height)
         }
     }
     printf("out of %d %d climbable\n", to - from, nClimbable);
+#endif
     
     //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-1, 0, -1), glm::vec3(1, -1, 1), glm::vec3(-1, 0, 1) });
     
+#if 0
     for (glm::vec3 cubePosition: cubePositions)
         for (GLSingleTextureMesh subMesh: cube.singleTextureMeshDecomposition)
         {
@@ -95,17 +115,18 @@ void GameController::initializeGraphics(int width, int height)
                 physicsEngine.triangles.push_back(triangle);
             }
         }
+#endif
     
     currentWidth = width;
     currentHeight = height;
     
     cameraVector = glm::vec3(0, 0, -1);
-    player.position = glm::vec3(0, 0, +1);
+    player.position = glm::vec3(0, 0, 0);
     player.radius = 0.2;
     player.currentWalkSpeed = 1;
     updatePlayerDirection();
     
-    physicsEngine.physicalBodies.push_back(&player);
+    //physicsEngine.physicalBodies.push_back(&player);
 
 	glViewport(0, 0, width, height);
 	glClearColor(0, 0, 0, 0);
@@ -158,8 +179,9 @@ void GameController::simulateWorld(double msPassed)
         //player.position += glm::vec3(0, 1, 0);
     }
     
-    physicsEngine.gravity = pressedKeys.count(SDLK_e) ? 0 : 0.03;
-    physicsEngine.processPhysics();
+    player.currentWalkSpeed = 1;
+    worldContainer.processPhysics(player);
+    //physicsEngine.processPhysics();
 }
 
 void GameController::keyPressed(SDL_Keycode keycode)
@@ -203,7 +225,7 @@ void GameController::renderFrame()
     viewMatrix = glm::mat4();
     modelMatrix = glm::mat4();
     
-    glm::vec3 playerHeightVector(0, 1 - player.radius, 0);
+    glm::vec3 playerHeightVector(0, 2 - player.radius, 0);
     
     // make vertical FOV fixed
     float aspectRatio = (float)currentWidth / (float)currentHeight;
@@ -249,10 +271,10 @@ void GameController::renderFrame()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     glDisable(GL_COLOR_MATERIAL);
-    glEnable(GL_TEXTURE_2D);
-	glBindTexture(GL_TEXTURE_2D, texture.openglId);
+    //glEnable(GL_TEXTURE_2D);
+	//glBindTexture(GL_TEXTURE_2D, texture.openglId);
     
-    for (auto pos: cubePositions)
+    /*for (auto pos: cubePositions)
     {
         glm::mat4 modelMatrix;
         modelMatrix = glm::translate(modelMatrix, pos);
@@ -261,14 +283,17 @@ void GameController::renderFrame()
         
         glLoadMatrixf(glm::value_ptr(finalMatrix));
         cube.render();
-    }
+    }*/
+    
+    worldContainer.renderWorld(projectionMatrix * viewMatrix);
     
     glm::mat4 finalMatrix = projectionMatrix * viewMatrix;
     glLoadMatrixf(glm::value_ptr(finalMatrix));
     
     //if (physicsDebugMode)
     {
-        physicsEngine.dumpRenderNoModelview(false, physicsDebugMode);
+        //physicsEngine.dumpRenderNoModelview(false, physicsDebugMode);
+        worldContainer.dumpRenderPhysics(player);
     }
 
     if (physicsDebugMode)
@@ -278,6 +303,6 @@ void GameController::renderFrame()
         modelMatrix = glm::scale(modelMatrix, glm::vec3(player.radius, player.radius, player.radius));
         
         glLoadMatrixf(glm::value_ptr(projectionMatrix * viewMatrix * modelMatrix));
-        cube.render();
+        meshCollection.cubeMesh.render();
     }
 }

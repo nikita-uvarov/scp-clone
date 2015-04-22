@@ -1,72 +1,15 @@
 #include "GLUtils.h"
-#include "SDLUtils.h"
-#include "SDL_image.h"
-
-#include <glm/gtx/norm.hpp>
-#include "glm/gtx/transform.hpp"
-#include "glm/gtc/type_ptr.hpp"
 
 #include <set>
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <map>
+#include <string>
+#include <sstream>
 
 using namespace std;
-
-int extendToPowerOfTwo(int number)
-{
-    int twoPower = 1;
-    
-    while (twoPower < number)
-        twoPower *= 2;
-    
-    return twoPower;
-}
-
-GLTexture createTextureFromSurface(SDL_Surface* surface)
-{
-    // is invalid until gl id is assigned
-    GLTexture texture = {};
-    texture.originalWidth = surface->w;
-    texture.originalHeight = surface->h;
-    
-    texture.extendedWidth = extendToPowerOfTwo(texture.originalWidth);
-    texture.extendedHeight = extendToPowerOfTwo(texture.originalHeight);
-
-	SDL_Surface* image = SDL_CreateRGBSurface(SDL_SWSURFACE, texture.originalWidth, texture.originalHeight,
-                                              32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
-	if (image == nullptr)
-        return texture;
-    
-	SDL_BlendMode saved_mode;
-	SDL_GetSurfaceBlendMode(surface, &saved_mode);
-	SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_NONE);
-
-	SDL_Rect all = { 0, 0, texture.originalWidth, texture.originalHeight };
-	SDL_BlitSurface(surface, &all, image, &all);
-
-	SDL_SetSurfaceBlendMode(surface, saved_mode);
-
-	glGenTextures(1, &texture.openglId);
-	glBindTexture(GL_TEXTURE_2D, texture.openglId);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.originalWidth, texture.originalWidth, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
-	SDL_FreeSurface(image);
-
-	return texture;
-}
-
-GLTexture loadTexture(const char* fileName)
-{
-    SDL_Surface* surface = IMG_Load(fileName);
-	SDL_VerifyResult(surface, "Unable to load texture '%s': '%s'\n", fileName, SDL_GetError());
-    
-	GLTexture texture = createTextureFromSurface(surface);
-	SDL_FreeSurface(surface);
-    
-    return texture;
-}
+using namespace sge;
 
 bool GLSingleTextureMesh::checkIndices()
 {
@@ -88,19 +31,20 @@ void GLSingleTextureMesh::render() const
     
     for (unsigned i = 0; i < triangleIndices.size(); i++)
     {
-        const glm::vec3& vertex = vertices[triangleIndices[i]];
-        const glm::vec2& texCoords = textureCoords[triangleIndices[i]];
-        glTexCoord2f(texCoords.x, texCoords.y);
-        glVertex3f(vertex.x, vertex.y, vertex.z);
+        const vec3& vertex = vertices[triangleIndices[i]];
+        const vec2& texCoords = textureCoords[triangleIndices[i]];
+        glTexCoord2d(texCoords.x, 1 - texCoords.y);
+        glVertex3d(vertex.x, vertex.y, vertex.z);
     }
     
     glEnd();
 }
 
+// FIXME: remove this class & all mesh decomposition bicycles completely
 struct UniqueVertex
 {
-    glm::vec3 vertex;
-    glm::vec2 textureCoords;
+    vec3 vertex;
+    vec2 textureCoords;
     
     UniqueVertex(const GLSimpleFace& face, int index):
         vertex(face.vertices[index]), textureCoords(face.textureCoords[index])
@@ -108,7 +52,6 @@ struct UniqueVertex
     
     bool operator<(const UniqueVertex& v) const
     {
-        // FIXME: 1e-3
 #define compareBy(field) if (!(abs(field - v.field) < 1e-3)) { return field < v.field; }
         compareBy(vertex.x);
         compareBy(vertex.y);
@@ -118,6 +61,19 @@ struct UniqueVertex
 #undef compareBy
         
         return false;
+    }
+    
+    bool operator==(const UniqueVertex& v)
+    {
+#define compareBy(field) if (!(abs(field - v.field) < 1e-3)) { return false; }
+        compareBy(vertex.x);
+        compareBy(vertex.y);
+        compareBy(vertex.z);
+        compareBy(textureCoords.x);
+        compareBy(textureCoords.y);
+#undef compareBy
+        
+        return true;
     }
 };
 
@@ -168,6 +124,8 @@ void GLSimpleMesh::decomposeIntoSingleTextureMeshes()
                 for (unsigned vertexIndex = 0; vertexIndex < faces[j].vertices.size(); vertexIndex++)
                 {
                     UniqueVertex key(faces[j], vertexIndex);
+                    
+                    // FIXME: again, remove this shit completely
                     auto vertexIt = lower_bound(linear.begin(), linear.end(), key);
                     
                     // Triggers if some points are close but not too close
@@ -209,10 +167,10 @@ void GLSimpleMesh::decomposeIntoSingleTextureMeshes()
     }
 }
 
-void colorf(glm::vec3 vec)
+void colorf(vec3 vec)
 {
-    GLfloat color = cos(vec.x + vec.y + vec.z) * 0.25f + 0.6f;
-    glColor3f(color, color, color);
+    ftype color = cos(vec.x + vec.y + vec.z) * 0.25 + 0.6;
+    glColor3d(color, color, color);
 }
 
 /*void SimplePhysicsEngine::dumpRenderNoModelview(bool overlapGeometry, bool renderCollisions)
@@ -258,7 +216,7 @@ void colorf(glm::vec3 vec)
     glDisable(GL_COLOR_MATERIAL);
 }*/
 
-void CharacterController::easyMove(MovementType type, double speed, double dt)
+void CharacterController::easyMove(MovementType type, ftype speed, ftype timeCoefficient)
 {
     //if (abs(yAccel < 1e-3) return;
     speed = currentWalkSpeed;
@@ -268,29 +226,29 @@ void CharacterController::easyMove(MovementType type, double speed, double dt)
         case MovementType::STRAFE_LEFT:
         case MovementType::STRAFE_RIGHT:
         {
-            glm::vec3 rightStrafe = glm::cross(direction, glm::vec3(0, 1, 0));
+            vec3 rightStrafe = glm::cross(direction, vec3(0, 1, 0));
             
             if (type == MovementType::STRAFE_RIGHT)
-                position += rightStrafe * (GLfloat)(speed * dt);
+                position += rightStrafe * (speed * timeCoefficient);
             else
-                position += -rightStrafe * (GLfloat)(speed * dt);
+                position += -rightStrafe * (speed * timeCoefficient);
             
             break;
         }
         
         case MovementType::FORWARD:
         {
-            position += direction * (GLfloat)(speed * dt);
+            position += direction * (speed * timeCoefficient);
             break;
         }
         
         case MovementType::BACKWARD:
         {
-            position += -direction * (GLfloat)(speed * dt);
+            position += -direction * (speed * timeCoefficient);
             break;
         }
         
-        default: SDL_assert(!"impossible");
+        default: unreachable();
     }
 }
 
@@ -300,7 +258,7 @@ void CharacterController::easyMove(MovementType type, double speed, double dt)
         processBody(*body);
 }*/
 
-void CharacterController::applySpeedCorrections()
+void CharacterController::applySpeedCorrections(ftype timeCoefficient)
 {
     if (newWalkSpeed < 1e3)
     {
@@ -309,20 +267,45 @@ void CharacterController::applySpeedCorrections()
     
     newWalkSpeed = 1e3;
     
-    position += glm::vec3(0, yAccel, 0);
+    position += vec3(0, yAccel * timeCoefficient, 0);
     
-    yAccel -= 0.003;
+    yAccel -= 0.003 * timeCoefficient;
     
-    const double minYaccel = -0.07;
+    const ftype minYaccel = -0.07;
     if (yAccel < minYaccel) yAccel = minYaccel;
 }
 
-glm::vec4 extendPositionVector(glm::vec3 pos)
-{
-    return glm::vec4(pos.x, pos.y, pos.z, 1);
+void CharacterController::applyYSmooth(ftype timeCoefficient)
+{   
+    ftype delta = abs(ySmooth - position.y);
+    // delta > 2.0 -> low smoothing (coef = 0.25)
+    // delta < 0.01 -> high smoothing (coef = 1)
+    
+    ftype highSmoothFloor = 0.01;
+    ftype lowSmoothCeiling = 0.8;
+    
+    ftype smoothingCoefficient = 0;
+    
+    if (delta < highSmoothFloor)
+        smoothingCoefficient = 1;
+    else if (delta > lowSmoothCeiling)
+        smoothingCoefficient = 0.25;
+    else
+    {
+        ftype t = (delta - highSmoothFloor) / (lowSmoothCeiling - highSmoothFloor);
+        smoothingCoefficient = 1 - 0.75 * t * t;
+    }
+    
+    ftype dy = ySmooth * (smoothingCoefficient - 1) + position.y * (1 - smoothingCoefficient);
+    ySmooth += dy * timeCoefficient;
 }
 
-void dumpMatrix(glm::mat4 m)
+vec4 extendPositionVector(vec3 pos)
+{
+    return vec4(pos.x, pos.y, pos.z, 1);
+}
+
+void dumpMatrix(mat4 m)
 {
     for (int x = 0; x < 4; x++)
     {
@@ -336,9 +319,11 @@ void CharacterController::processCollisionsAgainstMesh(GLPositionedMesh& mesh, C
 {
     //dumpMatrix(mesh.modelMatrix);
     // TODO: it is probably possible to use commented method of transformations
-    // to achieve faster physics (no double matrix multiplications for each vertex)
+    // to achieve faster physics (no ftype matrix multiplications for each vertex)
     // though precision losses & jitter may follow
-    //position = glm::vec3(mesh.inverseModelMatrix * extendPositionVector(position));
+    // EDIT: now when doubles are used instead of floats,
+    // no such problems should happen provided coordinates are not changed if there were no collision
+    //position = vec3(mesh.inverseModelMatrix * extendPositionVector(position));
     //collisionOccured = false;
     
     //printf("matrix %lf %lf %lf\n", mesh.modelMatrix[0][3], mesh.modelMatrix[1][3], mesh.modelMatrix[2][3]);
@@ -347,9 +332,11 @@ void CharacterController::processCollisionsAgainstMesh(GLPositionedMesh& mesh, C
     
     for (GLSimpleFace& face: mesh.baseMesh->faces)
     {
-        vector<glm::vec3> vertices = face.vertices;
+        if (!face.isCollisionActive) continue;
+        
+        vector<vec3> vertices = face.vertices;
         for (auto& v: vertices)
-            v = glm::vec3(mesh.modelMatrix * extendPositionVector(v));
+            v = vec3(mesh.modelMatrix * extendPositionVector(v));
       
         for (int vertex = 2; vertex < (int)face.vertices.size(); vertex++)
         {
@@ -357,7 +344,6 @@ void CharacterController::processCollisionsAgainstMesh(GLPositionedMesh& mesh, C
                 processCollisionsAgainstTriangle(face, vertices, 0, vertex - 1, vertex);
             else
             {
-                // FIXME:
                 processCollisionsAgainstSegment(vertices[0], vertices[vertex - 1]);
                 processCollisionsAgainstSegment(vertices[vertex - 1], vertices[vertex]);
                 processCollisionsAgainstSegment(vertices[0], vertices[vertex]);
@@ -366,7 +352,7 @@ void CharacterController::processCollisionsAgainstMesh(GLPositionedMesh& mesh, C
     }
     
     //if (collisionOccured)
-    //    position = glm::vec3(mesh.modelMatrix * extendPositionVector(position));
+    //    position = vec3(mesh.modelMatrix * extendPositionVector(position));
 }
 
 void CharacterController::dumpRenderCollisionsAgainstMesh(GLPositionedMesh& mesh)
@@ -385,13 +371,13 @@ void CharacterController::dumpRenderCollisionsAgainstMesh(GLPositionedMesh& mesh
     
     for (GLSimpleFace& face: mesh.baseMesh->faces)
     {
-        vector<glm::vec3> vertices = face.vertices;
+        vector<vec3> vertices = face.vertices;
         for (auto& v: vertices)
-            v = glm::vec3(mesh.modelMatrix * extendPositionVector(v));
+            v = vec3(mesh.modelMatrix * extendPositionVector(v));
         
         glBegin(GL_POLYGON);
         for (auto it: vertices)
-            glVertex3f(it.x, it.y, it.z);
+            glVertex3d(it.x, it.y, it.z);
         glEnd();
     }
     
@@ -402,37 +388,15 @@ void CharacterController::dumpRenderCollisionsAgainstMesh(GLPositionedMesh& mesh
     glDisable(GL_COLOR_MATERIAL);
 }
 
-/*void SimplePhysicsEngine::processBody(PhysicalBody& body)
-{
-    
-    for (PhysicalTriangle& triangle: triangles)
-    {
-        triangle.collisionType = 0;
-        processBodyTriangle(body, triangle);
-    }
-    
-    for (const PhysicalTriangle& triangle: triangles)
-    {
-        processBodySegment(body, triangle.a, triangle.b);
-        processBodySegment(body, triangle.b, triangle.c);
-        processBodySegment(body, triangle.c, triangle.a);
-    }
-    
-    if (body.newWalkSpeed < 1e3)
-    {
-        body.currentWalkSpeed = body.newWalkSpeed;
-    }
-}*/
-
-double absTriangleSquare(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c)
+ftype absTriangleSquare(const vec3& a, const vec3& b, const vec3& c)
 {
     return glm::length(glm::cross(b - a, c - a)) * 0.5;
 }
 
-bool pointInTriangle(glm::vec3 point, glm::vec3 a, glm::vec3 b, glm::vec3 c)
+bool pointInTriangle(vec3 point, vec3 a, vec3 b, vec3 c)
 {
-    double square = absTriangleSquare(a, b, c);
-    double withPoint =
+    ftype square = absTriangleSquare(a, b, c);
+    ftype withPoint =
         absTriangleSquare(a, b, point) +
         absTriangleSquare(b, c, point) +
         absTriangleSquare(c, a, point);
@@ -443,36 +407,36 @@ bool pointInTriangle(glm::vec3 point, glm::vec3 a, glm::vec3 b, glm::vec3 c)
     return false;
 }
 
-void CharacterController::processCollisionsAgainstSegment(glm::vec3 a, glm::vec3 b)
+void CharacterController::processCollisionsAgainstSegment(vec3 a, vec3 b)
 {
-    glm::vec3& pos = position;
-    double tProjected = glm::dot(b - a, pos - a);
+    vec3& pos = position;
+    ftype tProjected = glm::dot(b - a, pos - a);
     if (tProjected < 0 || tProjected > glm::length2(b - a))
         return;
     
-    double distance = absTriangleSquare(a, b, pos) / glm::length(b - a) * 2;
+    ftype distance = absTriangleSquare(a, b, pos) / glm::length(b - a) * 2;
     
     if (distance < radius)
     {
-        glm::vec3 projection = a + (GLfloat)(tProjected / glm::length2(b - a)) * (b - a);
+        vec3 projection = a + (tProjected / glm::length2(b - a)) * (b - a);
         //printf("got %lf %lf\n", glm::length(pos - projection), distance);
         //fflush(stdout);
         assert(abs(glm::length(pos - projection) - distance) < 1e-3);
         
-        double inside = (radius - distance) / radius;
+        ftype inside = (radius - distance) / radius;
         
-        glm::vec3 fixVector = pos - projection;
+        vec3 fixVector = pos - projection;
         if (abs(inside) > 0.001)
         {
-            pos = pos + fixVector * (GLfloat)((radius - distance) / radius);
+            pos = pos + fixVector * ((radius - distance) / radius);
             collisionOccured = true;
         }
     }
 }
 
-void CharacterController::processCollisionsAgainstTriangle(GLSimpleFace& generatingFace, vector< glm::vec3 >& transformedVertices, int i, int j, int k)
+void CharacterController::processCollisionsAgainstTriangle(GLSimpleFace& generatingFace, vector< vec3 >& transformedVertices, int i, int j, int k)
 {   
-    const glm::vec3
+    const vec3
         &triangleA = transformedVertices[i],
         &triangleB = transformedVertices[j],
         &triangleC = transformedVertices[k];
@@ -482,27 +446,27 @@ void CharacterController::processCollisionsAgainstTriangle(GLSimpleFace& generat
     //   if lower then radius
     //     apply normal correction
     
-    glm::vec3 normal = glm::cross(triangleB - triangleA, triangleC - triangleA);
+    vec3 normal = glm::cross(triangleB - triangleA, triangleC - triangleA);
     normal = glm::normalize(normal);
     
     // in Ax + By + Cz + D = 0 equation
-    double D = -glm::dot(normal, triangleA);
+    ftype D = -glm::dot(normal, triangleA);
     
-    double distance = glm::dot(normal, position) + D;
+    ftype distance = glm::dot(normal, position) + D;
     
     if (abs(distance) < radius)
     {
         // check that projects onto triangle
         // or one of the sides intersects sphere
         
-        glm::vec3 projection = position - normal * (GLfloat)distance;
+        vec3 projection = position - normal * distance;
         
         bool intersection = pointInTriangle(projection, triangleA, triangleB, triangleC);
             
         if (intersection)
         {
             {
-                double inside = 0;
+                ftype inside = 0;
                 
                 if (distance > 0)
                     inside = (radius - distance);
@@ -516,7 +480,7 @@ void CharacterController::processCollisionsAgainstTriangle(GLSimpleFace& generat
                 
                 if (abs(inside) > 0.001)
                 {
-                    position += normal * (GLfloat)inside * 0.95f;
+                    position += normal * inside * 0.95;
                     collisionOccured = true;
                 }
                 
@@ -548,7 +512,7 @@ void CharacterController::processCollisionsAgainstTriangle(GLSimpleFace& generat
     }
 }*/
 
-void SimpleWorldContainer::addPositionedMesh(GLSimpleMesh& baseMesh, glm::vec3 position)
+void SimpleWorldContainer::addPositionedMesh(GLSimpleMesh& baseMesh, vec3 position)
 {
     GLPositionedMesh mesh = GLPositionedMesh();
     mesh.baseMesh = &baseMesh;
@@ -560,22 +524,31 @@ void SimpleWorldContainer::addPositionedMesh(GLSimpleMesh& baseMesh, glm::vec3 p
     positionedMeshes.push_back(mesh);
 }
 
-void SimpleWorldContainer::renderWorld(glm::mat4 projectionViewMatrix)
+void SimpleWorldContainer::renderWorld(mat4 projectionViewMatrix)
 {
     for (GLPositionedMesh& positionedMesh: positionedMeshes)
     {
-        glLoadMatrixf(glm::value_ptr(projectionViewMatrix * positionedMesh.modelMatrix));
+        glLoadMatrixd(glm::value_ptr(projectionViewMatrix * positionedMesh.modelMatrix));
         positionedMesh.baseMesh->render();
     }
 }
 
-void SimpleWorldContainer::processPhysics(CharacterController& controller)
+void SimpleWorldContainer::processPhysics(CharacterController& controller, ftype dt)
 {
-    controller.applySpeedCorrections();
+    // physics engine is designed (read: constant tweaked) to use 1 / 60.0 step,
+    // but theoretically it is possible to speed up and slow down
+    
+    ftype timeCoefficient = dt / (1 / 60.0);
+    controller.applySpeedCorrections(timeCoefficient);
     
     for (int t = 0; t < 2; t++)
         for (GLPositionedMesh& mesh: positionedMeshes)
             controller.processCollisionsAgainstMesh(mesh, t == 0 ? CollisionPhase::TRIANGLES : CollisionPhase::SEGMENTS);
+        
+    if (controller.enableSmoothing)
+        controller.applyYSmooth(timeCoefficient);
+    else
+        controller.ySmooth = controller.position.y;
 }
 
 void SimpleWorldContainer::dumpRenderPhysics(CharacterController& controller)

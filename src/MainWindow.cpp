@@ -1,29 +1,31 @@
 #include "MainWindow.h"
-#include "SDLUtils.h"
 
 #include <string>
 
 using namespace std;
+using namespace sge;
 
 void MainWindow::initializeSDL()
 {
 	SDL_LogSetPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_INFO);
 
-    SDL_VerifyResult(SDL_Init(SDL_INIT_VIDEO) == 0, "Unable to initialize SDL: %s\n", SDL_GetError());
+    verify(SDL_Init(SDL_INIT_VIDEO) == 0, "Unable to initialize SDL: %s\n", SDL_GetError());
 }
 
 void MainWindow::createWindow()
 {
-    sdlWindow = SDL_CreateWindow(legacyTitle.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED);
-	SDL_VerifyResult(sdlWindow, "Unable to create OpenGL sdlWindow: %s\n", SDL_GetError());
+    sdlWindow = SDL_CreateWindow(legacyTitle.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 640, 480, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_MAXIMIZED |  SDL_WINDOW_INPUT_GRABBED);
+	verify(sdlWindow, "Unable to create OpenGL sdlWindow: %s\n", SDL_GetError());
     
-    SDL_VerifyResult(SDL_GL_CreateContext(sdlWindow), "Unable to create OpenGL context: %s\n", SDL_GetError());
+    verify(SDL_GL_CreateContext(sdlWindow), "Unable to create OpenGL context: %s\n", SDL_GetError());
     
 	SDL_GL_SetSwapInterval(0);
     
     gameController->initializeGraphics(640, 480);
     
     SDL_SetRelativeMouseMode(SDL_TRUE);
+    //SDL_ShowCursor(0);
+    //SDL_WM_GrabInput( SDL_GRAB_ON );
 }
 
 void MainWindow::startMainLoop()
@@ -32,11 +34,11 @@ void MainWindow::startMainLoop()
     
     int framesRendered = 0;
     int lastFpsUpdate = SDL_GetTicks();
-    double lastLogicUpdate = lastFpsUpdate;
+    ftype lastLogicUpdate = lastFpsUpdate;
     
-    double elementaryLogicTicks = 1000.0 / 60.0;
+    ftype elementaryLogicTicks = 1000.0 / 60.0;
     
-    //elementaryLogicTicks = 1000.0 / 5.0;
+    //elementaryLogicTicks = 1000.0 / 60.0;
     
 	while (isMainLoopRunning)
 	{
@@ -45,16 +47,23 @@ void MainWindow::startMainLoop()
 
 		while (currentTicks - lastFpsUpdate > 1000.0)
 		{
-			double fps = framesRendered * 1000.0 / (currentTicks - lastFpsUpdate);
+			ftype fps = framesRendered * 1000.0 / (currentTicks - lastFpsUpdate);
 			std::string fpsString = "FPS: " + std::to_string(fps);
 			SDL_SetWindowTitle(sdlWindow, (legacyTitle + " [" + fpsString + "]").c_str());
 			lastFpsUpdate = currentTicks;
 			framesRendered = 0;
+            
+            // also flush streams occasionally to see debug output
+            fflush(stdout);
+            fflush(stderr);
 		}
 		
 		while ((currentTicks - lastLogicUpdate) > elementaryLogicTicks)
         {
             gameController->simulateWorld(elementaryLogicTicks);
+            gameController->simulateWorld(elementaryLogicTicks);
+            //gameController->simulateWorld(elementaryLogicTicks);
+            //gameController->simulateWorld(elementaryLogicTicks);
             lastLogicUpdate += elementaryLogicTicks;
         }
 		
@@ -84,6 +93,8 @@ void MainWindow::processEvents()
             if (event.key.keysym.sym == SDLK_F1)
             {
                 isFullscreen = !isFullscreen;
+                
+                // change size event will be dispatched automatically
                 
                 if (isFullscreen)
                     SDL_SetWindowFullscreen(sdlWindow, SDL_WINDOW_FULLSCREEN);

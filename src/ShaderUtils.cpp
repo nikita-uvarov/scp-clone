@@ -1,26 +1,28 @@
 #include "ShaderUtils.h"
 
-#include <stdio.h>
+#include <cstdio>
+#include <memory>
+#include <vector>
+#include <cerrno>
 
-char* getFileContents(const char* fileName)
+using namespace std;
+
+string getFileContents(const char* fileName)
 {
     FILE* file = fopen(fileName, "r");
-    
-    // FIXME: error handling
-    SDL_assert(file);
+    verify(file, "Failed to fopen '%s' for reading: %s", fileName, strerror(errno));
     
     fseek(file, 0, SEEK_END);
-    int fileLength = (int)ftell(file);
+    long fileLength = (long)ftell(file);
     fseek(file, 0, SEEK_SET);
     
-    char* fileContents = new char[fileLength + 1];
-    fread(fileContents, 1, fileLength, file);
-    fileContents[fileLength] = 0;
+    vector<char> fileContents(fileLength);
+    fread(fileContents.data(), 1, fileLength, file);
     
-    return fileContents;
+    return string(fileContents.begin(), fileContents.end());
 }
 
-char* getShaderLog(GLuint object)
+string getShaderOrProgramLog(GLuint object)
 {
     GLint logLength = 0;
     
@@ -29,44 +31,41 @@ char* getShaderLog(GLuint object)
     else if (glIsProgram(object))
         glGetProgramiv(object, GL_INFO_LOG_LENGTH, &logLength);
     else
-        SDL_assert(!"not a shader or program");
+        critical_error("%s: An object is not a shader nor a program.", __FUNCTION__);
 
-    char* log = new char[logLength];
+    vector<char> logContents(logLength);
 
     if (glIsShader(object))
-        glGetShaderInfoLog(object, logLength, nullptr, log);
+        glGetShaderInfoLog(object, logLength, nullptr, logContents.data());
     else if (glIsProgram(object))
-        glGetProgramInfoLog(object, logLength, nullptr, log);
+        glGetProgramInfoLog(object, logLength, nullptr, logContents.data());
 
-    return log;
+    return string(logContents.begin(), logContents.end());
 }
 
 GLuint loadGlShader(const char* fileName, GLenum glShaderType, const char* shaderCodePrefix)
 {
-    const char* contents = getFileContents(fileName);
+    string contents = getFileContents(fileName);
     
     GLuint shader = glCreateShader(glShaderType);
-    int length = (int)strlen(contents);
     
-    const char* sections[] = { shaderCodePrefix, contents };
-    const int lengths[] = { strlen(shaderCodePrefix), length };
+    const char* sections[] = { shaderCodePrefix, contents.c_str() };
+    const GLint lengths[] = { (GLint)strlen(shaderCodePrefix), (GLint)contents.length() };
     
     glShaderSource(shader, 2, sections, lengths);
-    delete[] contents;
 
     glCompileShader(shader);
+    
     GLint successful = GL_FALSE;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &successful);
+    
     if (successful == GL_FALSE)
     {
         fprintf(stderr, "%s:", fileName);
-        char* log = getShaderLog(shader);
-        fprintf(stderr, "%s\n", log);
-        delete[] log;
+        string log = getShaderOrProgramLog(shader);
         glDeleteShader(shader);
         
-        // FIXME: error handling
-        SDL_assert(!"shader not loaded");
+        critical_error("Failed to load shader '%s': %s", fileName, log.c_str());
     }
     
     return shader;

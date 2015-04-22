@@ -1,12 +1,14 @@
 #ifndef MAIN_WINDOW_H
 #define MAIN_WINDOW_H
 
-#include "SDL.h"
-#include "SDL_opengl.h"
+#include "Common.h"
 
 #include "IGameController.h"
 
 #include <string>
+
+namespace sge
+{
 
 class MainWindow
 {
@@ -33,5 +35,7 @@ public :
     
     void processEvents();
 };
+
+}
 
 #endif // MAIN_WINDOW_H

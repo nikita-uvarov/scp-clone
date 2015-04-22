@@ -7,8 +7,9 @@ cmake_minimum_required(VERSION 2.6)
 find_package(OpenGL REQUIRED)
 find_package(SDL2 REQUIRED)
 find_package(SDL2_image REQUIRED)
+find_package(PugiXML REQUIRED)
 
-include_directories(SYSTEM ${SDL2_INCLUDE_DIR} ${SDL2IMAGE_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR})
+include_directories(SYSTEM ${SDL2_INCLUDE_DIR} ${SDL2IMAGE_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR} ${PUGIXML_INCLUDE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wno-missing-field-initializers")
@@ -22,17 +23,20 @@ set(opengl-test-sources
 	src/GameController.cpp
 	src/GLUtils.cpp
 	src/ScpMeshCollection.cpp
-	src/ShaderUtils.cpp)
+	src/ShaderUtils.cpp
+	src/Textures.cpp
+	src/Common.cpp)
 
 set(opengl-test-headers
     src/MainWindow.h
     src/IGameController.h
     src/GameController.h
     src/GLUtils.h
-    src/SDLUtils.h
     src/ScpMeshCollection.h
-    src/ShaderUtils.h)
+    src/ShaderUtils.h
+    src/Textures.h
+    src/Common.h)
 
 add_executable(opengl-test ${opengl-test-sources})
 
-target_link_libraries(opengl-test ${SDL2_LIBRARY} ${SDL2IMAGE_LIBRARY} ${OPENGL_LIBRARY})
+target_link_libraries(opengl-test ${SDL2_LIBRARY} ${SDL2IMAGE_LIBRARY} ${OPENGL_LIBRARY} ${PUGIXML_LIBRARY})

@@ -3,6 +3,9 @@
 
 #include "SDL/SDL.h"
 
+namespace sge
+{
+
 class IGameController
 {
 public :
@@ -15,8 +18,10 @@ public :
     virtual void keyReleased(SDL_Keycode keycode) = 0;
     virtual void relativeMouseMotion(int dx, int dy) = 0;
     
-    virtual void simulateWorld(double msPassed) = 0;
+    virtual void simulateWorld(ftype msPassed) = 0;
     virtual void renderFrame() = 0;
 };
+
+}
 
 #endif // I_GAME_CONTROLLER_H

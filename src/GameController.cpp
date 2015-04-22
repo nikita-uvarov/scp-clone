@@ -7,20 +7,86 @@
 #include <algorithm>
 
 using namespace std;
+using namespace sge;
 
-GameController::GameController(): meshCollection(textureManager) {}
+void FullScreenRenderTarget::create(int width, int height)
+{
+    printf("created %d x %d\n", width, height);
+    glGenTextures(1, &textureId);
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glGenRenderbuffers(1, &zBufferRbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, zBufferRbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT,
+                          width, height);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureId, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, zBufferRbo);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    SDL_assert(status == GL_FRAMEBUFFER_COMPLETE);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void FullScreenRenderTarget::destroy()
+{
+    if (textureId)
+    {
+        glDeleteTextures(1, &textureId);
+        textureId = 0;
+    }
+    if (zBufferRbo)
+    {
+        glDeleteRenderbuffers(1, &zBufferRbo);
+        zBufferRbo = 0;
+    }
+    
+    if (fbo)
+    {
+        glDeleteFramebuffers(1, &fbo);
+        fbo = 0;
+    }
+}
+
+void FullScreenRenderTarget::renderScreenQuad()
+{
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    glEnable(GL_TEXTURE_2D);
+    glLoadIdentity();
+    
+    glBegin(GL_QUADS);
+    glTexCoord2f(0, 0); glVertex2f(-1, -1);
+    glTexCoord2f(0, 1); glVertex2f(-1, +1);
+    glTexCoord2f(1, 1); glVertex2f(+1, +1);
+    glTexCoord2f(1, 0); glVertex2f(+1, -1);
+    glEnd();
+    
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
 
 // gets 'shortest rotation' (without 'spinning')
-glm::mat4 getRotationMatrix(glm::vec3 from, glm::vec3 to)
+mat4 getRotationMatrix(vec3 from, vec3 to)
 {
-    glm::mat4 rotation;
+    mat4 rotation;
     
-    glm::vec3 axis = glm::cross(from, to);
+    vec3 axis = glm::cross(from, to);
     if (glm::length(axis) < 1e-3)
         return rotation;
     
-    double angle = glm::orientedAngle(from, to, axis);
-    rotation = glm::rotate(rotation, (GLfloat)angle, axis);
+    ftype angle = glm::orientedAngle(from, to, axis);
+    rotation = glm::rotate(rotation, angle, axis);
     return rotation;
 }
 
@@ -30,26 +96,51 @@ void GameController::initializeGraphics(int width, int height)
     wireframeMode = false;
     physicsDebugMode = true;
     fogEnabled = false;
+    enableSimpleBlur = false;
+    
+    blurBufferA.create(width, height);
+    blurBufferB.create(width, height);
     
     meshCollection.loadMeshes();
-    
-    //texture = loadTexture("resources/verticals.jpg");
-    //cube = createCubeMesh(texture.openglId, texture.getMaxU(), texture.getMaxV());
-    //cube.decomposeIntoSingleTextureMeshes();
-    
+        
     for (int z = 5; z >= -20; z -= 3)
     {
         for (int t = 0; t < 2; t++)
-            worldContainer.addPositionedMesh(meshCollection.cubeMesh, glm::vec3((t * 2 - 1) * 3, 0, z));
+            worldContainer.addPositionedMesh(meshCollection.cubeMesh, vec3((t * 2 - 1) * 3, 0, z));
         
-        //cubePositions.push_back(glm::vec3(-3, 0, z));
-        //cubePositions.push_back(glm::vec3(3, 0, z));
+        //cubePositions.push_back(vec3(-3, 0, z));
+        //cubePositions.push_back(vec3(3, 0, z));
     }
     
-    glm::mat4 currentModelview;
-    glm::vec3 viewDirection(0, 0, -1);
+    worldContainer.addPositionedMesh(meshCollection.plane, vec3(0, 0, 0));
     
-    for (int i = 0; i < 10; i++)
+    loadedMesh = loadColladaMesh("resources/Hyena_Rig_Final.dae");
+    GLPositionedMesh positioned;
+    positioned.baseMesh = &loadedMesh;
+    positioned.modelMatrix = glm::scale(positioned.modelMatrix, vec3(0.2, 0.2, 0.2));
+    positioned.modelMatrix = glm::translate(positioned.modelMatrix, vec3(0, 2, -3));
+    worldContainer.positionedMeshes.push_back(positioned);
+    
+#define testStairs(name, dx, dy, x) \
+        static GLSimpleMesh name = meshCollection.createStaircase(dx, 0, 0, dy, (int)(5.0 / dy)); \
+        worldContainer.addPositionedMesh(name, vec3(x, 0, -5));
+    
+#if 0
+    testStairs(stairs0, 0.35, 0.35, -1);
+    testStairs(stairs1, 0.27, 0.27, 0);
+    testStairs(stairs2, 0.2, 0.2, 1);
+    testStairs(stairs3, 0.1, 0.1, 2);
+    testStairs(stairs4, 0.5, 0.27, -2);
+#endif
+    
+    //static GLSimpleMesh stairs = meshCollection.createStaircase(0.27, 0, 0, 0.27, 10);
+    //worldContainer.addPositionedMesh(stairs, vec3(0, 0, -1));
+    
+    mat4 currentModelview;
+    vec3 viewDirection(0, 0, -5);
+    
+#if 1
+    for (int i = 0; i < 2; i++)
     {
         GLSimpleMesh& simpleMesh = meshCollection.staircase;
         
@@ -64,92 +155,14 @@ void GameController::initializeGraphics(int width, int height)
         currentModelview = glm::translate(currentModelview, continuation.position);
         currentModelview = currentModelview * getRotationMatrix(viewDirection, continuation.direction);
     }
-    
-    //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, -5), glm::vec3(5, -1, 5), 1 });
-    //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-5, -1, -5), glm::vec3(5, -1, 5), glm::vec3(-5, -1, 5), 1 });
-    
-    GLfloat step = 0.27f;
-    GLfloat yOffset = 0, zOffset = 0;
-    GLfloat horizSlope = 0.75f;
-    horizSlope = 0;
-    
-#if 0
-    int from = (int)physicsEngine.triangles.size();
-    
-    for (int t = 0; t < 100; t++)
-    {
-#define vertex(x, y, z) glm::vec3((x), -1 + (y) + yOffset, -5 + (z) + zOffset)
-#define triangle(a, b, c) physicsEngine.triangles.push_back(PhysicalTriangle { a, b, c, 0.6 })
-#define quad(a, b, c, d) { triangle(a, b, c); triangle(a, c, d); }
-        
-        quad(vertex(0, 0, 0), vertex(0, +step, -horizSlope), vertex(1, +step, -horizSlope), vertex(1, 0, 0));
-        
-        yOffset += +step;
-        zOffset += -horizSlope;
-        
-        quad(vertex(0, 0, 0), vertex(1, 0, 0), vertex(1, 0, -step), vertex(0, 0, -step));
-        
-        zOffset += -step;
-        
-        /*physicsEngine.triangles.push_back(PhysicalTriangle {
-            glm::vec3(-5, -1 - step * t, -5 - step * t),
-            glm::vec3(5, -1 - step * t, -5 - step * t),
-            glm::vec3(5, -1 - step * (t * 1), -5 - step * t) });*/
-        
-#undef vertex
-#undef triangle
-#undef quad
-    }
-    
-    int to = (int)physicsEngine.triangles.size();
-    
 #endif
-    
-#if 0
-    int nClimbable = 0;
-    for (int i = from; i < to; i++)
-    {
-        auto& triangle = physicsEngine.triangles[i];
-        GLfloat yMin = min(triangle.a.y, min(triangle.b.y, triangle.c.y));
-        GLfloat yMax = max(triangle.a.y, max(triangle.b.y, triangle.c.y));
-        
-        if (yMax - yMin > 1e-3)
-        {
-            //triangle.walkSpeed = 1;
-            //triangle.climbSpeed = 10;
-            triangle.isClimber = true;
-            nClimbable++;
-            //printf("Ok climbable\n");
-        }
-    }
-    printf("out of %d %d climbable\n", to - from, nClimbable);
-#endif
-    
-    //physicsEngine.triangles.push_back(PhysicalTriangle { glm::vec3(-1, 0, -1), glm::vec3(1, -1, 1), glm::vec3(-1, 0, 1) });
-    
-#if 0
-    for (glm::vec3 cubePosition: cubePositions)
-        for (GLSingleTextureMesh subMesh: cube.singleTextureMeshDecomposition)
-        {
-            SDL_assert(subMesh.triangleIndices.size() % 3 == 0);
-            
-            for (int triangleIndex = 0; triangleIndex * 3 < (int)subMesh.triangleIndices.size(); triangleIndex++)
-            {
-                vector<glm::vec3> vertices;
-                for (int t = 0; t < 3; t++)
-                    vertices.push_back(cubePosition + subMesh.vertices[subMesh.triangleIndices[triangleIndex * 3 + t]]);
-                
-                PhysicalTriangle triangle = { vertices[0], vertices[1], vertices[2] };
-                physicsEngine.triangles.push_back(triangle);
-            }
-        }
-#endif
-    
     currentWidth = width;
     currentHeight = height;
     
-    cameraVector = glm::vec3(0, 0, -1);
-    player.position = glm::vec3(0, 0.5, 0);
+    cameraVector = vec3(0, 0, -1);
+    player.position = vec3(0, 0.5, 0);
+    player.enableSmoothing = true;
+    player.ySmooth = player.position.y;
     player.radius = 0.2;
     //player.radius = 0.05;
     player.currentWalkSpeed = 1;
@@ -164,7 +177,6 @@ void GameController::initializeGraphics(int width, int height)
     
 	glClearDepth(1.0);
 	glDepthFunc(GL_LESS);
-	glEnable(GL_DEPTH_TEST);
 	glShadeModel(GL_SMOOTH);
     
 	glMatrixMode(GL_MODELVIEW);
@@ -205,14 +217,15 @@ void GameController::reloadShaders()
     
     GLint linkOk;
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &linkOk);
-    SDL_assert(linkOk);
+    if (!linkOk)
+        critical_error("Failed to link shader program: %s", getShaderOrProgramLog(shaderProgram).c_str());
     
     glUseProgram(shaderProgram);
 }
 
 void GameController::updatePlayerDirection()
 {
-    player.direction = glm::normalize(glm::vec3(cameraVector.x, 0, cameraVector.z));
+    player.direction = glm::normalize(vec3(cameraVector.x, 0, cameraVector.z));
 }
 
 void GameController::changeWindowSize(int newWidth, int newHeight)
@@ -221,14 +234,20 @@ void GameController::changeWindowSize(int newWidth, int newHeight)
     
     currentWidth = newWidth;
     currentHeight = newHeight;
+    
+    blurBufferA.destroy();
+    blurBufferB.destroy();
+    
+    blurBufferA.create(newWidth, newHeight);
+    blurBufferB.create(newWidth, newHeight);
 }
 
-void GameController::simulateWorld(double msPassed)
+void GameController::simulateWorld(ftype msPassed)
 {
     currentTime += msPassed / 1000.0;
     
-    double speed = 1;
-    double dt = msPassed / 1000.0;
+    ftype speed = 1;
+    ftype dt = msPassed / 1000.0;
  
     updatePlayerDirection();
     
@@ -247,11 +266,17 @@ void GameController::simulateWorld(double msPassed)
     if (pressedKeys.count(SDLK_SPACE))
     {
         player.yAccel = 0.1;
-        //player.position += glm::vec3(0, 1, 0);
+        //player.position += vec3(0, 1, 0);
+    }
+    
+    if (pressedKeys.count(SDLK_j))
+    {
+        if (abs(player.yAccel) < 0.01)
+            player.yAccel = 0.1;
     }
     
     player.currentWalkSpeed = 1;
-    worldContainer.processPhysics(player);
+    worldContainer.processPhysics(player, dt);
     //physicsEngine.processPhysics();
 }
 
@@ -268,7 +293,12 @@ void GameController::keyReleased(SDL_Keycode keycode)
         firstPersonMode = !firstPersonMode;
     
     if (keycode == SDLK_o)
+    {
         wireframeMode = !wireframeMode;
+        
+        if (wireframeMode)
+            enableSimpleBlur = false;
+    }
     
     if (keycode == SDLK_p)
         physicsDebugMode = !physicsDebugMode;
@@ -284,91 +314,99 @@ void GameController::keyReleased(SDL_Keycode keycode)
         
         reloadShaders();
     }
+    
+    if (keycode == SDLK_y)
+    {
+        player.enableSmoothing = !player.enableSmoothing;
+    }
+    
+    if (keycode == SDLK_b)
+    {
+        enableSimpleBlur = !enableSimpleBlur;
+        
+        if (enableSimpleBlur)
+            wireframeMode = false;
+    }
 }
 
 void GameController::relativeMouseMotion(int dx, int dy)
 {
-    GLfloat rdx = (GLfloat)dx / 10000.0f, rdy = (GLfloat)dy / 10000.0f;
+    ftype rdx = dx / 10000.0, rdy = dy / 10000.0;
     
-    glm::mat4 rotation;
-    rotation = glm::rotate(rotation, rdx, glm::vec3(0, 1, 0));
-    rotation = glm::rotate(rotation, rdy, glm::cross(cameraVector, glm::vec3(0, 1, 0)));
+    mat4 rotation;
+    rotation = glm::rotate(rotation, rdx, vec3(0, 1, 0));
+    cameraVector = glm::normalize(cameraVector * mat3(rotation));
     
-    cameraVector = glm::normalize(cameraVector * glm::mat3(rotation));
+    rotation = mat4();
+    rotation = glm::rotate(rotation, rdy, glm::cross(cameraVector, vec3(0, 1, 0)));
+    
+    vec3 newCameraVector = glm::normalize(cameraVector * mat3(rotation));
+    
+    if (abs(newCameraVector.y) < 0.98)
+    {
+        cameraVector = newCameraVector;
+        //newCameraVector.y = (newCameraVector.y > 0 ? 1 : -1) * 0.95;
+        //newCameraVector = glm::normalize(newCameraVector);
+    }
 }
 
 void GameController::renderFrame()
 {   
-    GLfloat angle = (GLfloat)currentTime / 5;
     
-    projectionMatrix = glm::mat4();
-    viewMatrix = glm::mat4();
-    modelMatrix = glm::mat4();
+    ftype angle = currentTime / 5.0;
     
-    glm::vec3 playerHeightVector(0, 2 - player.radius, 0);
+    projectionMatrix = mat4();
+    viewMatrix = mat4();
+    modelMatrix = mat4();
+    
+    vec3 playerHeightVector(0, 1.7 - player.radius, 0);
     
     // make vertical FOV fixed
-    float aspectRatio = (float)currentWidth / (float)currentHeight;
+    ftype aspectRatio = currentWidth / (ftype)currentHeight;
     
-    //projectionMatrix = glm::frustum(-1.0 * aspectRatio, 1.0 * aspectRatio, -1.0, 1.0, 1.0, 1e3);
-    projectionMatrix = glm::perspective(45.0f / 180.0f * (GLfloat)M_PI, aspectRatio, 0.1f, 1e3f);
+    projectionMatrix = glm::perspective(45.0 / 180.0 * M_PI, aspectRatio, 0.1, 1e3);
+    
+    playerHeightVector.y += player.ySmooth - player.position.y;
     
     if (!firstPersonMode)
     {
         viewMatrix = glm::lookAt(player.position + playerHeightVector,
-                                player.position + playerHeightVector + cameraVector, glm::vec3(0, 1, 0));
+                                 player.position + playerHeightVector + cameraVector, vec3(0, 1, 0));
     }
     else
     {
-        viewMatrix = glm::lookAt(player.position + playerHeightVector - cameraVector * 4.0f,
-                                player.position + playerHeightVector, glm::vec3(0, 1, 0));
+        viewMatrix = glm::lookAt(player.position + playerHeightVector - cameraVector * 4.0,
+                                 player.position + playerHeightVector, vec3(0, 1, 0));
     }
     
-    modelMatrix = glm::translate(modelMatrix, glm::vec3(0, 0, -5));
-    modelMatrix = glm::rotate(modelMatrix, angle, glm::vec3(sin(angle), sin(angle + 2 * M_PI / 3), sin(angle + M_PI / 3)));
-    modelMatrix = glm::scale(modelMatrix, glm::vec3(2, 2, 2));
-    
-    /*if (fogEnabled)
-    {
-        glFogi(GL_FOG_MODE, GL_LINEAR);
-        glFogfv(GL_FOG_COLOR, glm::value_ptr(glm::vec3(0, 0, 0)));
-        glFogf(GL_FOG_DENSITY, 1.0f);
-        glHint(GL_FOG_HINT, GL_DONT_CARE);
-        glFogf(GL_FOG_START, 1.5f);
-        glFogf(GL_FOG_END, 3.0f);
-        glEnable(GL_FOG);
-    }
-    else
-    {
-        glDisable(GL_FOG);
-    }*/
+    modelMatrix = glm::translate(modelMatrix, vec3(0, 0, -5));
+    modelMatrix = glm::rotate(modelMatrix, angle, vec3(sin(angle), sin(angle + 2 * M_PI / 3), sin(angle + M_PI / 3)));
+    modelMatrix = glm::scale(modelMatrix, vec3(2, 2, 2));
     
     if (wireframeMode)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     else    
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     
+    // glPolygonMode does not work in framebuffers,
+    // so we should not use them unless the blur is enabled,
+    // or the wireframe mode won't work
+    SDL_assert(!(wireframeMode && enableSimpleBlur));
+    
+    if (enableSimpleBlur)
+        glBindFramebuffer(GL_FRAMEBUFFER, blurBufferA.fbo);
+    
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
     
     glDisable(GL_COLOR_MATERIAL);
     //glEnable(GL_TEXTURE_2D);
 	//glBindTexture(GL_TEXTURE_2D, texture.openglId);
     
-    /*for (auto pos: cubePositions)
-    {
-        glm::mat4 modelMatrix;
-        modelMatrix = glm::translate(modelMatrix, pos);
-        
-        glm::mat4 finalMatrix = projectionMatrix * viewMatrix * modelMatrix;
-        
-        glLoadMatrixf(glm::value_ptr(finalMatrix));
-        cube.render();
-    }*/
-    
     worldContainer.renderWorld(projectionMatrix * viewMatrix);
     
-    glm::mat4 finalMatrix = projectionMatrix * viewMatrix;
-    glLoadMatrixf(glm::value_ptr(finalMatrix));
+    mat4 finalMatrix = projectionMatrix * viewMatrix;
+    glLoadMatrixd(glm::value_ptr(finalMatrix));
     
     //if (physicsDebugMode)
     {
@@ -378,11 +416,29 @@ void GameController::renderFrame()
 
     if (physicsDebugMode)
     {
-        modelMatrix = glm::mat4();
+        modelMatrix = mat4();
         modelMatrix = glm::translate(modelMatrix, player.position);
-        modelMatrix = glm::scale(modelMatrix, glm::vec3(player.radius, player.radius, player.radius));
+        modelMatrix = glm::scale(modelMatrix, vec3(player.radius, player.radius, player.radius));
         
-        glLoadMatrixf(glm::value_ptr(projectionMatrix * viewMatrix * modelMatrix));
+        glLoadMatrixd(glm::value_ptr(projectionMatrix * viewMatrix * modelMatrix));
         meshCollection.cubeMesh.render();
+    }
+    
+    if (enableSimpleBlur)
+    {
+        glDisable(GL_DEPTH_TEST);
+    
+        glEnable(GL_BLEND);
+        glBlendColor(0, 0, 0, 0.85f);
+        glBlendFunc(GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA);
+        
+        blurBufferB.renderScreenQuad();
+        
+        glDisable(GL_BLEND);
+        
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        blurBufferA.renderScreenQuad();
+        
+        swap(blurBufferA, blurBufferB);
     }
 }

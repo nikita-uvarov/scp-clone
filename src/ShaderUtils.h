@@ -1,12 +1,13 @@
 #ifndef SHADER_UTILS_H
 #define SHADER_UTILS_H
 
-#include "SDL.h"
-#include "SDL_opengl.h"
+#include "Common.h"
 
-char* getFileContents(const char* fileName);
+#include <string>
 
-char* getShaderLog(GLuint shaderOrProgramObject);
+std::string getFileContents(const char* fileName);
+
+std::string getShaderOrProgramLog(GLuint shaderOrProgramObject);
 
 GLuint loadGlShader(const char* fileName, GLenum glShaderType, const char* shaderCodePrefix);
 

@@ -1,6 +1,8 @@
 #ifndef SCP_MESH_COLLECTION_H
 #define SCP_MESH_COLLECTION_H
 
+#include "Textures.h"
+
 #include "GLUtils.h"
 #include "glm/gtx/transform.hpp"
 
@@ -8,43 +10,39 @@
 #include <memory>
 #include <string>
 
-class SimpleTextureManager
+namespace sge
 {
-    std::map< std::string, std::unique_ptr<GLTexture> > textureByName;
-public :
-    
-    GLTexture& get(std::string name);
-};
+
+GLSimpleMesh loadColladaMesh(const char* colladaFileName);
 
 class StateMachineMeshEditor
 {
 protected :
-    SimpleTextureManager& textureManager;
     GLSimpleMesh* currentMesh;
     
-    GLTexture currentTexture;
+    const Texture* currentTexture;
     GLSimpleFace currentFace;
     
-    std::vector<glm::mat4> transformStack;
+    std::vector<mat4> transformStack;
     
     void loadIdentity()
     {
-        transformStack.back() = glm::mat4();
+        transformStack.back() = mat4();
     }
     
-    void translate(double x, double y, double z)
+    void translate(ftype x, ftype y, ftype z)
     {
-        transformStack.back() = glm::translate(transformStack.back(), glm::vec3((GLfloat)x, (GLfloat)y, (GLfloat)z));
+        transformStack.back() = glm::translate(transformStack.back(), vec3(x, y, z));
     }
     
-    void rotate(double radians, glm::vec3 axis)
+    void rotate(ftype radians, vec3 axis)
     {
-        transformStack.back() = glm::rotate(transformStack.back(), (GLfloat)radians, axis);
+        transformStack.back() = glm::rotate(transformStack.back(), radians, axis);
     }
     
-    void scale(double x, double y, double z)
+    void scale(ftype x, ftype y, ftype z)
     {
-        transformStack.back() = glm::scale(transformStack.back(), glm::vec3((GLfloat)x, (GLfloat)y, (GLfloat)z));
+        transformStack.back() = glm::scale(transformStack.back(), vec3(x, y, z));
     }
     
     void pushMatrix()
@@ -64,7 +62,8 @@ protected :
         currentFace.walkingSpeed = 0.0;
         currentFace.isClimber = false;
         currentFace.isCollisionActive = true;
-        currentFace.textureId = currentTexture.openglId;
+        
+        currentFace.textureId = currentTexture ? currentTexture->openglId : 0;
     }
    
     void beginMesh(GLSimpleMesh* mesh)
@@ -77,25 +76,25 @@ protected :
     
     void setTexture(std::string name)
     {
-        currentTexture = textureManager.get(name);
-        currentFace.textureId = currentTexture.openglId;
+        currentTexture = &TextureManager::instance().retrieveTexture(name);
+        currentFace.textureId = currentTexture->openglId;
     }
     
-    void verts(const std::vector<glm::vec3>& vertices)
+    void verts(const std::vector<vec3>& vertices)
     {
         for (auto v: vertices)
         {
-            v = glm::vec3(transformStack.back() * glm::vec4(v, 1.0));
+            v = vec3(transformStack.back() * glm::vec4(v, 1.0));
             currentFace.vertices.push_back(v);
         }
     }
     
-    void texCoords(const std::vector<glm::vec2>& texCoords)
+    void texCoords(const std::vector<vec2>& texCoords)
     {
         for (auto tc: texCoords)
         {
-            tc.x = tc.x * currentTexture.getMaxU();
-            tc.y = tc.y * currentTexture.getMaxV();
+            tc.x = tc.x * currentTexture->getMaxU();
+            tc.y = tc.y * currentTexture->getMaxV();
             currentFace.textureCoords.push_back(tc);
         }
     }
@@ -110,7 +109,7 @@ protected :
         currentFace.isCollisionActive = false;
     }
     
-    void setWalkingSpeed(double walkingSpeed)
+    void setWalkingSpeed(ftype walkingSpeed)
     {
         currentFace.walkingSpeed = walkingSpeed;
     }
@@ -125,12 +124,12 @@ protected :
     
     void markCurrentPosition(std::string name)
     {
-        const glm::mat4& currentMatrix = transformStack.back();
+        const mat4& currentMatrix = transformStack.back();
         
         MeshMarker marker;
         marker.name = name;
-        marker.direction = glm::vec3(currentMatrix * glm::vec4(0, 0, -1, 0));
-        marker.position = glm::vec3(currentMatrix * glm::vec4(0, 0, 0, 1));
+        marker.direction = vec3(currentMatrix * vec4(0, 0, -1, 0));
+        marker.position = vec3(currentMatrix * vec4(0, 0, 0, 1));
         
         currentMesh->markers.push_back(marker);
     }
@@ -150,11 +149,10 @@ protected :
     
     // handy quad adding functions for quads parallel to XY, YZ or ZX
     
-    void addQuad(glm::vec3 a, glm::vec3 b, double textureScale = 0.0);
+    void addQuad(vec3 a, vec3 b, ftype textureScale = 0.0);
     
 public :
-    
-    StateMachineMeshEditor(SimpleTextureManager& textureManager): textureManager(textureManager) {}
+    StateMachineMeshEditor(): currentTexture(nullptr) {}
 };
 
 class ScpMeshCollection : public StateMachineMeshEditor
@@ -162,14 +160,16 @@ class ScpMeshCollection : public StateMachineMeshEditor
 public :
     GLSimpleMesh cubeMesh;
     GLSimpleMesh staircase;
-    
-    ScpMeshCollection(SimpleTextureManager& textureManager): StateMachineMeshEditor(textureManager) {}
+    GLSimpleMesh plane;
     
     void createStaircaseMesh();
+    void createPlaneMesh();
     
     void loadMeshes();
+    
+    GLSimpleMesh createStaircase(ftype horizOne, ftype vertOne, ftype horizTwo, ftype vertTwo, int nSteps = 15);
 };
 
-//GLSimpleMesh createCubeMesh(GLuint textureId, GLfloat textureMaxX = 1.0f, GLfloat textureMaxY = 1.0f);
+}
 
 #endif // SCP_MESH_COLLECTION_H

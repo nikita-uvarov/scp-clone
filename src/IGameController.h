@@ -1,5 +1,5 @@
-#ifndef I_GAME_CONTROLLER_H
-#define I_GAME_CONTROLLER_H
+#ifndef SGE_I_GAME_CONTROLLER_H
+#define SGE_I_GAME_CONTROLLER_H
 
 #include "SDL/SDL.h"
 
@@ -24,4 +24,4 @@ public :
 
 }
 
-#endif // I_GAME_CONTROLLER_H
+#endif // SGE_I_GAME_CONTROLLER_H

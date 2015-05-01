@@ -93,8 +93,8 @@ enum class CollisionPhase
 class CharacterController
 {
     // might not be a good idea...
-    vec3 effectivePosition;
-    bool collisionOccured;
+    //vec3 effectivePosition;
+    //bool collisionOccured;
     
     void processCollisionsAgainstTriangle(GLSimpleFace& generatingFace, std::vector<vec3>& transformedVertices, int i, int j, int k);
     void processCollisionsAgainstSegment(vec3 a, vec3 b);
@@ -110,6 +110,10 @@ public :
     ftype yAccel;
     ftype currentWalkSpeed;
     ftype newWalkSpeed;
+    
+    CharacterController():
+        position(), enableSmoothing(false), ySmooth(position.y), direction(0, 0, -1), radius(1),
+        yAccel(0), currentWalkSpeed(0), newWalkSpeed(0) {}
     
     void easyMove(MovementType type, ftype speed, ftype timeCoefficient);
     

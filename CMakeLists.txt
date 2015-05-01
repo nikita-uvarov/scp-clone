@@ -25,7 +25,8 @@ set(opengl-test-sources
 	src/ScpMeshCollection.cpp
 	src/ShaderUtils.cpp
 	src/Textures.cpp
-	src/Common.cpp)
+	src/Common.cpp
+	src/ColladaMeshLoader.cpp)
 
 set(opengl-test-headers
     src/MainWindow.h
@@ -35,7 +36,8 @@ set(opengl-test-headers
     src/ScpMeshCollection.h
     src/ShaderUtils.h
     src/Textures.h
-    src/Common.h)
+    src/Common.h
+    src/ColladaMeshLoader.h)
 
 add_executable(opengl-test ${opengl-test-sources})
 

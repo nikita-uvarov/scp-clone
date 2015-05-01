@@ -429,7 +429,7 @@ void CharacterController::processCollisionsAgainstSegment(vec3 a, vec3 b)
         if (abs(inside) > 0.001)
         {
             pos = pos + fixVector * ((radius - distance) / radius);
-            collisionOccured = true;
+            //collisionOccured = true;
         }
     }
 }
@@ -481,7 +481,7 @@ void CharacterController::processCollisionsAgainstTriangle(GLSimpleFace& generat
                 if (abs(inside) > 0.001)
                 {
                     position += normal * inside * 0.95;
-                    collisionOccured = true;
+                    //collisionOccured = true;
                 }
                 
                 if (generatingFace.walkingSpeed > 1e-3)

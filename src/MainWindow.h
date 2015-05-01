@@ -1,5 +1,5 @@
-#ifndef MAIN_WINDOW_H
-#define MAIN_WINDOW_H
+#ifndef SGE_MAIN_WINDOW_H
+#define SGE_MAIN_WINDOW_H
 
 #include "Common.h"
 
@@ -38,4 +38,4 @@ public :
 
 }
 
-#endif // MAIN_WINDOW_H
+#endif // SGE_MAIN_WINDOW_H

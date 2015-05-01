@@ -1,11 +1,12 @@
-#ifndef GAME_CONTROLLER_H
-#define GAME_CONTROLLER_H
+#ifndef SGE_GAME_CONTROLLER_H
+#define SGE_GAME_CONTROLLER_H
 
 #include "Common.h"
 #include "IGameController.h"
 #include "GLUtils.h"
 #include "ScpMeshCollection.h"
 #include "ShaderUtils.h"
+#include "ColladaMeshLoader.h"
 
 #include <set>
 
@@ -54,6 +55,8 @@ class GameController : public IGameController
     
     std::set<std::string> shaderDefines;
     
+    sge::Mesh newMesh;
+    
     GLuint vertexShader, fragmentShader;
     GLuint shaderProgram;
     
@@ -80,4 +83,4 @@ public :
 
 }
 
-#endif // GAME_CONTROLLER_H
+#endif // SGE_GAME_CONTROLLER_H

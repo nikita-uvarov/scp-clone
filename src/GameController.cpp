@@ -114,12 +114,23 @@ void GameController::initializeGraphics(int width, int height)
     
     worldContainer.addPositionedMesh(meshCollection.plane, vec3(0, 0, 0));
     
+    //loadColladaMeshNew("resources/dae-inspection.dae");
+    //newMesh = loadColladaMeshNew("resources/animated-cube.dae");
+    //newMesh = loadColladaMeshNew("resources/dae-inspection.dae");
+    //newMesh = loadColladaMeshNew("resources/hyena-decimated.dae");
+    newMesh = loadColladaMeshNew("resources/astroboy.dae");
+    //newMesh = loadColladaMeshNew("resources/astroboy_walk.dae");
+    
     loadedMesh = loadColladaMesh("resources/Hyena_Rig_Final.dae");
     GLPositionedMesh positioned;
     positioned.baseMesh = &loadedMesh;
     positioned.modelMatrix = glm::scale(positioned.modelMatrix, vec3(0.2, 0.2, 0.2));
     positioned.modelMatrix = glm::translate(positioned.modelMatrix, vec3(0, 2, -3));
+    
+#if 0
+    // old Collada loader
     worldContainer.positionedMeshes.push_back(positioned);
+#endif
     
 #define testStairs(name, dx, dy, x) \
         static GLSimpleMesh name = meshCollection.createStaircase(dx, 0, 0, dy, (int)(5.0 / dy)); \
@@ -139,7 +150,7 @@ void GameController::initializeGraphics(int width, int height)
     mat4 currentModelview;
     vec3 viewDirection(0, 0, -5);
     
-#if 1
+#if 0
     for (int i = 0; i < 2; i++)
     {
         GLSimpleMesh& simpleMesh = meshCollection.staircase;
@@ -219,8 +230,6 @@ void GameController::reloadShaders()
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &linkOk);
     if (!linkOk)
         critical_error("Failed to link shader program: %s", getShaderOrProgramLog(shaderProgram).c_str());
-    
-    glUseProgram(shaderProgram);
 }
 
 void GameController::updatePlayerDirection()
@@ -320,12 +329,25 @@ void GameController::keyReleased(SDL_Keycode keycode)
         player.enableSmoothing = !player.enableSmoothing;
     }
     
+    if (keycode == SDLK_r)
+    {
+        player.position = vec3(0, 0.5, 0);
+        cameraVector = vec3(0, 0, -1);
+        player.yAccel = 0;
+        player.ySmooth = player.position.y;
+    }
+    
     if (keycode == SDLK_b)
     {
         enableSimpleBlur = !enableSimpleBlur;
         
         if (enableSimpleBlur)
             wireframeMode = false;
+    }
+    
+    if (keycode == SDLK_g)
+    {
+        newMesh.renderSkeleton = !newMesh.renderSkeleton;
     }
 }
 
@@ -352,7 +374,6 @@ void GameController::relativeMouseMotion(int dx, int dy)
 
 void GameController::renderFrame()
 {   
-    
     ftype angle = currentTime / 5.0;
     
     projectionMatrix = mat4();
@@ -385,7 +406,7 @@ void GameController::renderFrame()
     
     if (wireframeMode)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    else    
+    else
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     
     // glPolygonMode does not work in framebuffers,
@@ -403,6 +424,8 @@ void GameController::renderFrame()
     //glEnable(GL_TEXTURE_2D);
 	//glBindTexture(GL_TEXTURE_2D, texture.openglId);
     
+    glUseProgram(shaderProgram);
+    
     worldContainer.renderWorld(projectionMatrix * viewMatrix);
     
     mat4 finalMatrix = projectionMatrix * viewMatrix;
@@ -412,6 +435,28 @@ void GameController::renderFrame()
     {
         //physicsEngine.dumpRenderNoModelview(false, physicsDebugMode);
         //worldContainer.dumpRenderPhysics(player);
+    }
+    
+    {
+        glUseProgram(0);
+        
+        mat4 axisSwap(1, 0, 0, 0,
+                      0, 0, 1, 0,
+                      0, 1, 0, 0,
+                      0, 0, 0, 1);
+        
+        double sc = 0.5;
+        
+        modelMatrix = glm::mat4();
+        modelMatrix = glm::scale(modelMatrix, vec3(sc, sc, -sc));
+        modelMatrix = glm::translate(modelMatrix, vec3(0, 2, 10));
+        modelMatrix = modelMatrix * axisSwap;
+        
+        finalMatrix = projectionMatrix * viewMatrix * modelMatrix;
+        glLoadMatrixd(glm::value_ptr(finalMatrix));
+        newMesh.slowRender();
+        
+        glUseProgram(shaderProgram);
     }
 
     if (physicsDebugMode)

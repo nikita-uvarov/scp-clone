@@ -1,5 +1,5 @@
-#ifndef SCP_MESH_COLLECTION_H
-#define SCP_MESH_COLLECTION_H
+#ifndef SGE_SCP_MESH_COLLECTION_H
+#define SGE_SCP_MESH_COLLECTION_H
 
 #include "Textures.h"
 
@@ -172,4 +172,4 @@ public :
 
 }
 
-#endif // SCP_MESH_COLLECTION_H
+#endif // SGE_SCP_MESH_COLLECTION_H

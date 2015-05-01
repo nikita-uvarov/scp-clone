@@ -1,5 +1,5 @@
-#ifndef SHADER_UTILS_H
-#define SHADER_UTILS_H
+#ifndef SGE_SHADER_UTILS_H
+#define SGE_SHADER_UTILS_H
 
 #include "Common.h"
 
@@ -11,4 +11,4 @@ std::string getShaderOrProgramLog(GLuint shaderOrProgramObject);
 
 GLuint loadGlShader(const char* fileName, GLenum glShaderType, const char* shaderCodePrefix);
 
-#endif // SHADER_UTILS_H
+#endif // SGE_SHADER_UTILS_H

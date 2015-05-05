@@ -16,6 +16,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wno-missing-fi
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wswitch-default -Wswitch-enum -Wuninitialized -Winit-self -Wfloat-equal -Wwrite-strings -Wcast-qual -Wconversion -Waddress -Wlogical-op -Wno-sign-compare -Wzero-as-null-pointer-constant")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGL_GLEXT_PROTOTYPES")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_DEBUG")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
 
 set(opengl-test-sources
 	src/main.cpp
@@ -26,7 +27,8 @@ set(opengl-test-sources
 	src/ShaderUtils.cpp
 	src/Textures.cpp
 	src/Common.cpp
-	src/ColladaMeshLoader.cpp)
+	src/ColladaMeshLoader.cpp
+    src/PerformanceManager.cpp)
 
 set(opengl-test-headers
     src/MainWindow.h
@@ -37,7 +39,8 @@ set(opengl-test-headers
     src/ShaderUtils.h
     src/Textures.h
     src/Common.h
-    src/ColladaMeshLoader.h)
+    src/ColladaMeshLoader.h
+    src/PerformanceManager.h)
 
 add_executable(opengl-test ${opengl-test-sources})
 

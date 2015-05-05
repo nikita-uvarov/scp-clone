@@ -528,7 +528,8 @@ void SimpleWorldContainer::renderWorld(mat4 projectionViewMatrix)
 {
     for (GLPositionedMesh& positionedMesh: positionedMeshes)
     {
-        glLoadMatrixd(glm::value_ptr(projectionViewMatrix * positionedMesh.modelMatrix));
+        mat4 meshMatrix = projectionViewMatrix * positionedMesh.modelMatrix;
+        glLoadMatrixd(glm::value_ptr(meshMatrix));
         positionedMesh.baseMesh->render();
     }
 }

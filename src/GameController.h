@@ -16,9 +16,9 @@ namespace sge
 class FullScreenRenderTarget
 {
 public :
-    GLuint textureId;
-    GLuint zBufferRbo;
-    GLuint fbo;
+    GLuint textureId = 0;
+    GLuint zBufferRbo = 0;
+    GLuint fbo = 0;
     
     void create(int width, int height);
     void destroy();
@@ -28,18 +28,18 @@ public :
 
 class GameController : public IGameController
 {
-    int currentWidth, currentHeight;
-    ftype currentTime;
+    int currentWidth = 0, currentHeight = 0;
+    ftype currentTime = 0.0;
     
     mat4 projectionMatrix, viewMatrix, modelMatrix;
     
     std::set<SDL_Keycode> pressedKeys;
     
-    bool firstPersonMode;
-    bool wireframeMode;
-    bool fogEnabled;
-    bool physicsDebugMode;
-    bool enableSimpleBlur;
+    bool firstPersonMode = false;
+    bool wireframeMode = false;
+    bool fogEnabled = false;
+    bool physicsDebugMode = true;
+    bool enableSimpleBlur = false;
     
     CharacterController player;
     vec3 cameraVector;
@@ -57,8 +57,8 @@ class GameController : public IGameController
     
     sge::Mesh newMesh;
     
-    GLuint vertexShader, fragmentShader;
-    GLuint shaderProgram;
+    GLuint vertexShader = 0, fragmentShader = 0;
+    GLuint shaderProgram = 0;
     
     FullScreenRenderTarget blurBufferA, blurBufferB;
     

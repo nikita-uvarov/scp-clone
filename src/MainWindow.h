@@ -16,16 +16,16 @@ public :
     SDL_Window* sdlWindow;
     IGameController* gameController;
     std::string legacyTitle;
-    bool isMainLoopRunning;
+    bool isMainLoopRunning = false;
     
-    bool isFullscreen;
+    bool isFullscreen = false;
+    
+    bool enablePerformanceProfiling = false;
     
     MainWindow(std::string title, IGameController* gameController):
         sdlWindow(nullptr),
         gameController(gameController),
-        legacyTitle(title),
-        isMainLoopRunning(false),
-        isFullscreen(false)
+        legacyTitle(title)
     {}
     
     void initializeSDL();

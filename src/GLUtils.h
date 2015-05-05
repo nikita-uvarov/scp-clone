@@ -15,7 +15,7 @@ namespace sge
 class GLSingleTextureMesh
 {
 public :
-    GLuint textureId;
+    GLuint textureId = 0;
     
     std::vector<vec3> vertices;
     
@@ -32,13 +32,13 @@ public :
 class GLSimpleFace
 {
 public :
-    GLuint textureId;
+    GLuint textureId = 0;
     std::vector<vec3> vertices;
     std::vector<vec2> textureCoords;
     
-    bool isCollisionActive;
-    ftype walkingSpeed;
-    bool isClimber;
+    bool isCollisionActive = false;
+    ftype walkingSpeed = 0;
+    bool isClimber = false;
 };
 
 class MeshMarker
@@ -68,7 +68,7 @@ public :
 class GLPositionedMesh
 {
 public :
-    GLSimpleMesh* baseMesh;
+    GLSimpleMesh* baseMesh = nullptr;
     
     mat4 modelMatrix;
     
@@ -101,15 +101,15 @@ class CharacterController
 public :
     vec3 position;
     
-    bool enableSmoothing;
-    ftype ySmooth;
+    bool enableSmoothing = false;
+    ftype ySmooth = 0;
     
     vec3 direction;
-    ftype radius;
+    ftype radius = 0;
     
-    ftype yAccel;
-    ftype currentWalkSpeed;
-    ftype newWalkSpeed;
+    ftype yAccel = 0;
+    ftype currentWalkSpeed = 0;
+    ftype newWalkSpeed = 0;
     
     CharacterController():
         position(), enableSmoothing(false), ySmooth(position.y), direction(0, 0, -1), radius(1),

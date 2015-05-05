@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "PerformanceManager.h"
 
 #include <string>
 
@@ -47,9 +48,33 @@ void MainWindow::startMainLoop()
 
 		while (currentTicks - lastFpsUpdate > 1000.0)
 		{
+            if (enablePerformanceProfiling)
+                PerformanceManager::instance().updatePerformanceInformation();
+            
 			ftype fps = framesRendered * 1000.0 / (currentTicks - lastFpsUpdate);
-			std::string fpsString = "FPS: " + std::to_string(fps);
-			SDL_SetWindowTitle(sdlWindow, (legacyTitle + " [" + fpsString + "]").c_str());
+            
+            char fpsString[256];
+            sprintf(fpsString, "%.1lf", fps);
+            
+            ftype msPerFrame = (currentTicks - lastFpsUpdate) / (ftype)framesRendered;
+            
+            char mspfString[256];
+            sprintf(mspfString, "%.2lf", msPerFrame);
+            
+			std::string performanceString =
+                "FPS: " + string(fpsString) + ", " +
+                string(mspfString) + " ms/frame";
+                
+            if (enablePerformanceProfiling)
+            {
+                performanceString += ", " + PerformanceManager::instance().formatPerformanceString();
+            }
+            else
+            {
+                performanceString += ", [press i to enable perf profiling]";
+            }
+            
+			SDL_SetWindowTitle(sdlWindow, (legacyTitle + " [" + performanceString + "]").c_str());
 			lastFpsUpdate = currentTicks;
 			framesRendered = 0;
             
@@ -58,6 +83,9 @@ void MainWindow::startMainLoop()
             fflush(stderr);
 		}
 		
+		int nTicksMax = 1;
+        int nTicksSimulated = 0;
+		
 		while ((currentTicks - lastLogicUpdate) > elementaryLogicTicks)
         {
             gameController->simulateWorld(elementaryLogicTicks);
@@ -65,6 +93,9 @@ void MainWindow::startMainLoop()
             //gameController->simulateWorld(elementaryLogicTicks);
             //gameController->simulateWorld(elementaryLogicTicks);
             lastLogicUpdate += elementaryLogicTicks;
+            
+            nTicksSimulated++;
+            if (nTicksSimulated >= nTicksMax) break;
         }
 		
 		processEvents();
@@ -100,6 +131,11 @@ void MainWindow::processEvents()
                     SDL_SetWindowFullscreen(sdlWindow, SDL_WINDOW_FULLSCREEN);
                 else
                     SDL_SetWindowFullscreen(sdlWindow, 0);
+            }
+            
+            if (event.key.keysym.sym == SDLK_i)
+            {
+                enablePerformanceProfiling = !enablePerformanceProfiling;
             }
             
             gameController->keyPressed(event.key.keysym.sym);

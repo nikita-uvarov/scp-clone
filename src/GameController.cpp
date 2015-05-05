@@ -91,13 +91,7 @@ mat4 getRotationMatrix(vec3 from, vec3 to)
 }
 
 void GameController::initializeGraphics(int width, int height)
-{
-    firstPersonMode = false;
-    wireframeMode = false;
-    physicsDebugMode = true;
-    fogEnabled = false;
-    enableSimpleBlur = false;
-    
+{   
     blurBufferA.create(width, height);
     blurBufferB.create(width, height);
     
@@ -115,16 +109,24 @@ void GameController::initializeGraphics(int width, int height)
     worldContainer.addPositionedMesh(meshCollection.plane, vec3(0, 0, 0));
     
     //loadColladaMeshNew("resources/dae-inspection.dae");
-    //newMesh = loadColladaMeshNew("resources/animated-cube.dae");
-    //newMesh = loadColladaMeshNew("resources/dae-inspection.dae");
     //newMesh = loadColladaMeshNew("resources/hyena-decimated.dae");
+    //newMesh = loadColladaMeshNew("resources/dae-inspection.dae");
+    newMesh = loadColladaMeshNew("resources/animated-cube.dae");
+    newMesh = loadColladaMeshNew("resources/hyena-new-pro.dae");
+    newMesh = loadColladaMeshNew("resources/hyena-decimated.dae");
     newMesh = loadColladaMeshNew("resources/astroboy.dae");
-    //newMesh = loadColladaMeshNew("resources/astroboy_walk.dae");
+    //for (int i = 0; i < 10; i++)
     
-    loadedMesh = loadColladaMesh("resources/Hyena_Rig_Final.dae");
+    //loadedMesh = loadColladaMesh("resources/Hyena_Rig_Final.dae");
+    
+    /*int x = -1;
+    glGetIntegerv(0x9048, &x);
+    printf("%d\n", x);*/    
+    
+    //loadedMesh = loadColladaMesh("resources/nice-scene.dae");
     GLPositionedMesh positioned;
     positioned.baseMesh = &loadedMesh;
-    positioned.modelMatrix = glm::scale(positioned.modelMatrix, vec3(0.2, 0.2, 0.2));
+    //positioned.modelMatrix = glm::scale(positioned.modelMatrix, vec3(0.2, 0.2, 0.2));
     positioned.modelMatrix = glm::translate(positioned.modelMatrix, vec3(0, 2, -3));
     
 #if 0
@@ -167,6 +169,7 @@ void GameController::initializeGraphics(int width, int height)
         currentModelview = currentModelview * getRotationMatrix(viewDirection, continuation.direction);
     }
 #endif
+
     currentWidth = width;
     currentHeight = height;
     

@@ -62,8 +62,9 @@ unique_ptr<Texture> loadTexture(const char* fileName)
 }
 
 const Texture& TextureManager::retrieveTexture(string fileName)
-{
-    fileName = "resources/" + fileName;
+{   
+    if (fileName.empty() || fileName[0] != '/')
+        fileName = "resources/" + fileName;
     
     auto found = textureByName.find(fileName);
     if (found != textureByName.end())

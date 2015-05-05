@@ -11,9 +11,6 @@
 #include <algorithm>
 #include <queue>
 
-// FIXME: pass strings by reference
-// FIXME: size_t
-
 using namespace std;
 using namespace sge;
 using namespace pugi;
@@ -574,6 +571,7 @@ public :
         
         value.type = resultingType;
         int base = stride * index;
+        
         for (int i = 0; i < stride; i++)
             value.subvalues.push_back((*floatVector)[base + i]);
         
@@ -1498,9 +1496,6 @@ public :
                 indexOffset += 2;
             }
             
-            if (abs(totalWeight - 1) > 1e-3)
-                printf("denorm %f\n", totalWeight);
-            
             for (auto& weightPair: vertices.vertexWeights[vertex])
                 weightPair.second /= totalWeight;
         }
@@ -1681,10 +1676,12 @@ void ColladaMeshLoader::loadDocument(string fileName)
     processNode(rootNode);
     resolveLinks(rootNode);
 
+    /*
     printf("All nodes:\n");
     dump(rootNode, false);
     printf("Recreated nodes:\n");
     dump(rootNode, true);
+    */
     
     int totalNodes = countNodes(rootNode);
     printf("%d nodes total, %d nodes processed, %d recreated\n", totalNodes, nProcessed, nRecreated);
@@ -1763,6 +1760,7 @@ void Mesh::slowRenderPass(bool /*skeletonOnly*/)
     {
         junkied = true;
         //joints[5].transformStack.transforms.push_back(Transform { TransformationType::DEBUG_ROTATE });
+        //armatureTransformStack.transforms.push_back(Transform { TransformationType::DEBUG_ROTATE });
     }
     
     static bool premultiplied = false;
@@ -1784,6 +1782,8 @@ void interpolate(const FloatVectorValue& a, const FloatVectorValue& b, FloatVect
 {
     assert(a.subvalues.size() == b.subvalues.size() && a.subvalues.size() == result.subvalues.size());
     int n = (int)a.subvalues.size();
+    
+    //printf("interpolate %f..%f with %f\n", a.subvalues[0], b.subvalues[0], t);
     
     for (int i = 0; i < n; i++)
         result.subvalues[i] = a.subvalues[i] * (1 - t) + b.subvalues[i] * t;
@@ -1819,6 +1819,7 @@ void AnimationChannel::applyValue(Mesh& to, sge::ftype t)
             }
             else
             {
+                
                 interpolate(values[i], values[i + 1], to.joints[jointIndex].transformStack.transforms[transformIndex].value, tInterp);
             }
             
